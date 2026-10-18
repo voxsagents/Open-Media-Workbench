@@ -80,6 +80,13 @@ pub enum DubbingOperation {
         segment_id: String,
         offset_us: i64,
     },
+    UpdateMixConfiguration {
+        configuration: Box<crate::localization::dubbing::mixing::models::DubbingMixConfiguration>,
+    },
+    ApplyMixResult {
+        result: Box<crate::localization::dubbing::mixing::models::DubbingMixResult>,
+    },
+    InvalidateMixResult,
 }
 
 /// Applies a timeline editing operation to the DubbingProject.
@@ -290,6 +297,26 @@ pub fn apply_operation(
             if let Some(track) = project.find_track_mut(&track_id) {
                 track.sort_segments();
             }
+            project.touch();
+            Ok(())
+        }
+
+        DubbingOperation::UpdateMixConfiguration { configuration } => {
+            project.mix_configuration = Some((**configuration).clone());
+            // Changing mix settings invalidates previous rendered mixdown
+            project.mix_result = None;
+            project.touch();
+            Ok(())
+        }
+
+        DubbingOperation::ApplyMixResult { result } => {
+            project.mix_result = Some((**result).clone());
+            project.touch();
+            Ok(())
+        }
+
+        DubbingOperation::InvalidateMixResult => {
+            project.mix_result = None;
             project.touch();
             Ok(())
         }

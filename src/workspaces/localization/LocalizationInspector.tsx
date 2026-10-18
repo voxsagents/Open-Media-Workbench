@@ -33,6 +33,9 @@ import { GlossaryManagerPanel } from "./GlossaryManagerPanel";
 import { TextToSpeechPanel } from "./TextToSpeechPanel";
 import { VoiceLibraryPanel } from "./VoiceLibraryPanel";
 import { DubbingTimelinePanel } from "./DubbingTimelinePanel";
+import { DubbingMixerPanel } from "./DubbingMixerPanel";
+import { loadDubbingFromDocument, saveDubbingToDocument } from "../../lib/dubbing";
+import type { DubbingProject } from "../../types/dubbing";
 import type { SubtitleStyle } from "../../types/styling";
 import { DEFAULT_SUBTITLE_STYLE } from "../../lib/styling";
 
@@ -109,7 +112,18 @@ export function LocalizationInspector({
   const [exportFormat, setExportFormat] = useState<SubtitleFormat>("srt");
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
-  const [dubbingMode, setDubbingMode] = useState<"timeline" | "script">("timeline");
+  const [dubbingMode, setDubbingMode] = useState<"timeline" | "mixer" | "script">("timeline");
+  const [activeDubbingProject, setActiveDubbingProject] = useState<DubbingProject | null>(null);
+
+  React.useEffect(() => {
+    if (document) {
+      loadDubbingFromDocument(document)
+        .then((proj) => setActiveDubbingProject(proj))
+        .catch(() => setActiveDubbingProject(null));
+    } else {
+      setActiveDubbingProject(null);
+    }
+  }, [document]);
 
   const handleTabClick = (tab: LocalizationTab) => {
     setInternalTab(tab);
@@ -489,6 +503,17 @@ export function LocalizationInspector({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setDubbingMode("mixer")}
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    dubbingMode === "mixer"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Audio Mixer
+                </button>
+                <button
+                  type="button"
                   onClick={() => setDubbingMode("script")}
                   className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
                     dubbingMode === "script"
@@ -512,6 +537,19 @@ export function LocalizationInspector({
                   onDocumentChange={onDocumentChange}
                   onOpenVoiceLibrary={() => handleTabClick("voices")}
                   onOpenModelManager={() => setShowModelManager(true)}
+                />
+              ) : dubbingMode === "mixer" ? (
+                <DubbingMixerPanel
+                  project={activeDubbingProject}
+                  asset={asset}
+                  onProjectUpdated={(updated) => {
+                    setActiveDubbingProject(updated);
+                    if (document) {
+                      saveDubbingToDocument(document).then((doc) => {
+                        onDocumentChange(doc);
+                      });
+                    }
+                  }}
                 />
               ) : (
                 <TextToSpeechPanel

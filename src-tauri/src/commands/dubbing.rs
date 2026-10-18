@@ -18,10 +18,46 @@ use opentake_core::localization::dubbing::persistence::{
 use opentake_core::localization::dubbing::DubbingManager;
 use opentake_core::localization::subtitles::model::SubtitleDocument;
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DubbingMixReadiness {
+    pub is_ready: bool,
+    pub has_original_audio: bool,
+    pub original_audio_path: Option<String>,
+    pub total_speech_segments: usize,
+    pub ready_speech_segments: usize,
+    pub missing_speech_segments: usize,
+    pub has_existing_mix: bool,
+    pub is_mix_stale: bool,
+    pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DubbingMixdownStatus {
+    pub is_rendering: bool,
+    pub progress: f32,
+    pub message: String,
+    pub error: Option<String>,
+}
+
+impl Default for DubbingMixdownStatus {
+    fn default() -> Self {
+        Self {
+            is_rendering: false,
+            progress: 0.0,
+            message: "Idle".to_string(),
+            error: None,
+        }
+    }
+}
+
 /// Managed state holding DubbingManager and the currently active editing project.
 pub struct DubbingState {
     pub manager: Arc<DubbingManager>,
     pub active_project: Arc<RwLock<Option<DubbingProject>>>,
+    pub mix_cancel_token: Arc<RwLock<Option<tokio_util::sync::CancellationToken>>>,
+    pub mixdown_status: Arc<RwLock<DubbingMixdownStatus>>,
 }
 
 impl DubbingState {
@@ -29,6 +65,8 @@ impl DubbingState {
         Self {
             manager,
             active_project: Arc::new(RwLock::new(None)),
+            mix_cancel_token: Arc::new(RwLock::new(None)),
+            mixdown_status: Arc::new(RwLock::new(DubbingMixdownStatus::default())),
         }
     }
 
@@ -532,6 +570,317 @@ pub async fn batch_align_dubbing_segments(
             let _ = state.manager.execute_operation(project, &op).await;
         }
     }
+
+    Ok(project.clone())
+}
+
+/// Retrieves the current mix configuration for the active dubbing project.
+#[tauri::command]
+pub async fn get_dubbing_mix_configuration(
+    state: State<'_, DubbingState>,
+) -> Result<opentake_core::localization::dubbing::mixing::DubbingMixConfiguration, String> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    Ok(state.manager.get_mix_configuration(project))
+}
+
+/// Updates the mix configuration and invalidates previous stale mixdown results.
+#[tauri::command]
+pub async fn update_dubbing_mix_configuration(
+    state: State<'_, DubbingState>,
+    configuration: opentake_core::localization::dubbing::mixing::DubbingMixConfiguration,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let op_update = DubbingOperation::UpdateMixConfiguration {
+        configuration: Box::new(configuration),
+    };
+    state
+        .manager
+        .execute_operation(project, &op_update)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let op_invalidate = DubbingOperation::InvalidateMixResult;
+    state
+        .manager
+        .execute_operation(project, &op_invalidate)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(project.clone())
+}
+
+/// Checks readiness for rendering an audio mixdown.
+#[tauri::command]
+pub async fn get_dubbing_mix_readiness(
+    state: State<'_, DubbingState>,
+    media_path_override: Option<String>,
+) -> Result<DubbingMixReadiness, String> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let config = state.manager.get_mix_configuration(project);
+    let resolved_media_path = media_path_override
+        .map(PathBuf::from)
+        .or_else(|| project.media_reference.as_ref().map(PathBuf::from));
+
+    let mut warnings = Vec::new();
+    let has_orig_audio = if let Some(ref mpath) = resolved_media_path {
+        if mpath.exists() {
+            let (has_audio, _, _) =
+                opentake_core::localization::dubbing::mixing::probe_media_has_audio(mpath).await;
+            has_audio
+        } else {
+            warnings.push(format!(
+                "Source media '{}' not found on disk.",
+                mpath.display()
+            ));
+            false
+        }
+    } else {
+        false
+    };
+
+    let mut total_segments = 0;
+    let mut ready_segments = 0;
+    let mut missing_segments = 0;
+
+    for track in &project.tracks {
+        for seg in &track.segments {
+            total_segments += 1;
+            let active_asset_id = seg.active_audio_asset_id();
+            if let Some(asset) = project.assets.get(active_asset_id) {
+                if asset.file_path.exists() {
+                    ready_segments += 1;
+                } else {
+                    missing_segments += 1;
+                    warnings.push(format!(
+                        "Asset '{}' file is missing on disk.",
+                        asset.file_name
+                    ));
+                }
+            } else {
+                missing_segments += 1;
+                warnings.push(format!(
+                    "Segment '{}' has unresolved asset id '{}'.",
+                    seg.id, active_asset_id
+                ));
+            }
+        }
+    }
+
+    let has_existing_mix = project.mix_result.is_some();
+    let is_mix_stale = project.mix_result.is_none() && has_existing_mix;
+
+    let is_ready = (has_orig_audio || !config.original_audio_enabled)
+        && missing_segments == 0
+        && total_segments > 0;
+
+    Ok(DubbingMixReadiness {
+        is_ready,
+        has_original_audio: has_orig_audio,
+        original_audio_path: resolved_media_path.map(|p| p.to_string_lossy().to_string()),
+        total_speech_segments: total_segments,
+        ready_speech_segments: ready_segments,
+        missing_speech_segments: missing_segments,
+        has_existing_mix,
+        is_mix_stale,
+        warnings,
+    })
+}
+
+/// Generates the deterministic mixdown plan.
+#[tauri::command]
+pub async fn plan_dubbing_mix(
+    state: State<'_, DubbingState>,
+    media_path_override: Option<String>,
+) -> Result<opentake_core::localization::dubbing::mixing::DubbingMixPlan, String> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let override_path = media_path_override.as_ref().map(std::path::Path::new);
+    state
+        .manager
+        .plan_mix(project, None, override_path)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Renders the complete multitrack audio mixdown to a durable PCM WAV file.
+#[tauri::command]
+pub async fn start_dubbing_mixdown(
+    state: State<'_, DubbingState>,
+    media_path_override: Option<String>,
+) -> Result<opentake_core::localization::dubbing::mixing::DubbingMixResult, String> {
+    let cancel = tokio_util::sync::CancellationToken::new();
+    {
+        let mut token_guard = state.mix_cancel_token.write().await;
+        *token_guard = Some(cancel.clone());
+        let mut status_guard = state.mixdown_status.write().await;
+        *status_guard = DubbingMixdownStatus {
+            is_rendering: true,
+            progress: 0.1,
+            message: "Constructing deterministic audio mix plan...".to_string(),
+            error: None,
+        };
+    }
+
+    let override_path = media_path_override.as_ref().map(PathBuf::from);
+
+    let plan_res = {
+        let guard = state.active_project.read().await;
+        let Some(ref project) = *guard else {
+            let mut status_guard = state.mixdown_status.write().await;
+            status_guard.is_rendering = false;
+            status_guard.error = Some("No active dubbing project".into());
+            return Err("No active dubbing project".into());
+        };
+        state
+            .manager
+            .plan_mix(project, None, override_path.as_deref())
+            .await
+    };
+
+    let plan = match plan_res {
+        Ok(p) => p,
+        Err(e) => {
+            let mut status_guard = state.mixdown_status.write().await;
+            status_guard.is_rendering = false;
+            status_guard.error = Some(e.to_string());
+            return Err(e.to_string());
+        }
+    };
+
+    {
+        let mut status_guard = state.mixdown_status.write().await;
+        status_guard.progress = 0.4;
+        status_guard.message = "Executing system FFmpeg multitrack audio mixdown...".to_string();
+    }
+
+    let render_res = state.manager.render_mixdown(&plan, cancel).await;
+
+    let result = match render_res {
+        Ok(r) => r,
+        Err(e) => {
+            let mut status_guard = state.mixdown_status.write().await;
+            status_guard.is_rendering = false;
+            status_guard.error = Some(e.to_string());
+            return Err(e.to_string());
+        }
+    };
+
+    {
+        let mut guard = state.active_project.write().await;
+        if let Some(ref mut project) = *guard {
+            let op = DubbingOperation::ApplyMixResult {
+                result: Box::new(result.clone()),
+            };
+            let _ = state.manager.execute_operation(project, &op).await;
+        }
+
+        let mut status_guard = state.mixdown_status.write().await;
+        *status_guard = DubbingMixdownStatus {
+            is_rendering: false,
+            progress: 1.0,
+            message: "Mixdown complete".to_string(),
+            error: None,
+        };
+    }
+
+    Ok(result)
+}
+
+/// Retrieves the status of an ongoing or completed mixdown.
+#[tauri::command]
+pub async fn get_dubbing_mixdown_status(
+    state: State<'_, DubbingState>,
+) -> Result<DubbingMixdownStatus, String> {
+    let guard = state.mixdown_status.read().await;
+    Ok(guard.clone())
+}
+
+/// Cancels an active mixdown rendering process.
+#[tauri::command]
+pub async fn cancel_dubbing_mixdown(state: State<'_, DubbingState>) -> Result<(), String> {
+    let guard = state.mix_cancel_token.read().await;
+    if let Some(ref token) = *guard {
+        token.cancel();
+    }
+    let mut status_guard = state.mixdown_status.write().await;
+    status_guard.is_rendering = false;
+    status_guard.message = "Cancelled by user".to_string();
+    Ok(())
+}
+
+/// Retrieves the currently rendered mixdown result, if present.
+#[tauri::command]
+pub async fn get_dubbing_mixdown_result(
+    state: State<'_, DubbingState>,
+) -> Result<Option<opentake_core::localization::dubbing::mixing::DubbingMixResult>, String> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+    Ok(project.mix_result.clone())
+}
+
+/// Analyzes acoustic loudness, peaks, and clipping of a mixdown or audio asset.
+#[tauri::command]
+pub async fn analyze_dubbing_mix_audio(
+    state: State<'_, DubbingState>,
+    file_path: String,
+) -> Result<opentake_core::localization::dubbing::mixing::AudioAnalysisReport, String> {
+    let path = PathBuf::from(file_path);
+    state
+        .manager
+        .analyze_mix_audio(&path)
+        .map_err(|e| e.to_string())
+}
+
+/// Restores mixing configuration to a standard preset.
+#[tauri::command]
+pub async fn restore_dubbing_mix_configuration(
+    state: State<'_, DubbingState>,
+    preset: opentake_core::localization::dubbing::mixing::MixPreset,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let mut config =
+        opentake_core::localization::dubbing::mixing::DubbingMixConfiguration::new(&project.id);
+    opentake_core::localization::dubbing::mixing::apply_preset_to_configuration(
+        &mut config,
+        preset,
+    );
+
+    let op_update = DubbingOperation::UpdateMixConfiguration {
+        configuration: Box::new(config),
+    };
+    state
+        .manager
+        .execute_operation(project, &op_update)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let op_invalidate = DubbingOperation::InvalidateMixResult;
+    state
+        .manager
+        .execute_operation(project, &op_invalidate)
+        .await
+        .map_err(|e| e.to_string())?;
 
     Ok(project.clone())
 }

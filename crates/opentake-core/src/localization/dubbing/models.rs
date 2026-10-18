@@ -295,6 +295,13 @@ pub struct DubbingProject {
     /// Manifest of durable audio assets referenced by segments.
     #[serde(default)]
     pub assets: HashMap<String, DubbingAudioAsset>,
+    /// Optional project audio mixing configuration.
+    #[serde(default)]
+    pub mix_configuration:
+        Option<crate::localization::dubbing::mixing::models::DubbingMixConfiguration>,
+    /// Optional rendered mixdown result.
+    #[serde(default)]
+    pub mix_result: Option<crate::localization::dubbing::mixing::models::DubbingMixResult>,
     /// Creation timestamp (Unix epoch milliseconds).
     pub created_at_epoch_ms: u64,
     /// Last update timestamp (Unix epoch milliseconds).
@@ -323,6 +330,8 @@ impl DubbingProject {
             target_language: target_language.into(),
             tracks: Vec::new(),
             assets: HashMap::new(),
+            mix_configuration: None,
+            mix_result: None,
             created_at_epoch_ms: now_ms,
             updated_at_epoch_ms: now_ms,
         }

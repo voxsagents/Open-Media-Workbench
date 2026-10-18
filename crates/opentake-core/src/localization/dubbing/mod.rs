@@ -6,6 +6,7 @@
 pub mod alignment;
 pub mod errors;
 pub mod history;
+pub mod mixing;
 pub mod models;
 pub mod operations;
 pub mod persistence;
@@ -310,6 +311,46 @@ impl DubbingManager {
         let default_config = alignment::AlignmentConfig::default();
         let eff_config = config.unwrap_or(&default_config);
         alignment::evaluate_alignment_diagnostics(project, eff_config)
+    }
+
+    /// Retrieves current project mixing configuration or returns default configuration.
+    pub fn get_mix_configuration(
+        &self,
+        project: &DubbingProject,
+    ) -> mixing::DubbingMixConfiguration {
+        project
+            .mix_configuration
+            .clone()
+            .unwrap_or_else(|| mixing::DubbingMixConfiguration::new(&project.id))
+    }
+
+    /// Plans audio mixdown for a project.
+    pub async fn plan_mix(
+        &self,
+        project: &DubbingProject,
+        config_override: Option<&mixing::DubbingMixConfiguration>,
+        media_path_override: Option<&Path>,
+    ) -> Result<mixing::DubbingMixPlan, mixing::DubbingMixError> {
+        let fallback_config = self.get_mix_configuration(project);
+        let eff_config = config_override.unwrap_or(&fallback_config);
+        mixing::plan_dubbing_mix(project, eff_config, media_path_override).await
+    }
+
+    /// Executes genuine offline mixdown rendering via FFmpeg.
+    pub async fn render_mixdown(
+        &self,
+        plan: &mixing::DubbingMixPlan,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Result<mixing::DubbingMixResult, mixing::DubbingMixError> {
+        mixing::render_dubbing_mixdown(plan, &self.base_dir, cancel_token).await
+    }
+
+    /// Analyzes a WAV audio file for peaks, RMS, loudness, and clipping.
+    pub fn analyze_mix_audio(
+        &self,
+        wav_path: &Path,
+    ) -> Result<mixing::AudioAnalysisReport, mixing::DubbingMixError> {
+        mixing::analyze_pcm_wav_file(wav_path)
     }
 
     /// Helper to record an undo snapshot.

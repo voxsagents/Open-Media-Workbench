@@ -189,8 +189,14 @@ The foundational work completed across STEPS 1 through 9 remains completely pres
   - **Sample-Accurate PCM Silence Padding:** Exact sample frame padding (`PadEnd`, `PadStart`, `Centered`) preserving dialogue start rhythm.
   - **Non-Destructive Asset Cache & Staging:** Content-addressed SHA-256 storage (`aligned_{hash}.wav`) with immutable source speech preservation and instant restoration.
   - **True A/B Preview & Inspector:** Dedicated inspector with duration comparison, manual tempo sliders (0.50x–2.00x), start offset nudge controls, and synchronized A/B audio player over `opentake-media://`.
-  - **Batch Alignment:** Concurrently analyzes, plans, and fits dialogue segments across tracks with partial-success tolerance and cancellation support.
-- **Dialogue Mixing & Video Dubbing Export (Planned STEP 28)**
+- **Professional Original Audio Mixing & Multitrack Mixdown (STEP 28 Implemented):**
+  - **Original Soundtrack & Speech-Only Mixdown:** Decodes source video soundtrack or executes clean speech-only mixdown when media lacks audio. Source files remain 100% byte-for-byte immutable.
+  - **Sample-Accurate Speech Placement:** Places speech WAVs using FFmpeg `adelay` in sample units, respecting duration-aligned assets without double tempo adjustment.
+  - **Dialogue Ducking Engine:** Automatically attenuates original soundtrack during active speech intervals with attack, hold, release, and $O(N \log N)$ interval merging to prevent volume pumping.
+  - **Decibel Gain Staging & Limiter Protection:** Gain controls for original soundtrack, dubbing master, and per-track gains with `amix=normalize=0` and mastering limiter (`alimiter=limit=0.891`, -1.0 dBFS).
+  - **Production Presets & Acoustic Analysis:** Verified presets (`Balanced`, `Voice Focus`, `Preserve Original`, `Custom`) and genuine measurements of Peak dBFS, RMS, LUFS, and clipping samples.
+  - **Real Offline WAV Rendering & A/B Preview:** Async system FFmpeg mixdown producing durable 48 kHz stereo 16-bit PCM WAV assets with live A/B audition player and stale-mix invalidation.
+- **Unified Media Export (Planned STEP 29)**
 - **Multiplexed Soft Subtitle Export (Planned STEP 30):**
   - Uses the shared FFmpeg managed process engine to mux soft subtitle streams into output containers.
 
@@ -319,7 +325,7 @@ Each workspace is defined declaratively (`WORKSPACE_DEFINITIONS`) with its label
 | **Local Offline Whisper Transcription** | Localization | **Available** | STEP 19 (Verified) |
 | **Word-Level Subtitle Alignment** | Localization | **Available** | STEP 20 (Verified) |
 | **Subtitle Burn-In Video Export** | Localization | **Available** | STEP 21 (Verified) |
-| **Local Neural Machine Translation** | Localization | *Planned* | STEP 22–23 |
-| **Neural Speech Synthesis (Dubbing)** | Localization | *Planned* | STEP 24–28 |
+| **Local Neural Machine Translation** | Localization | **Available** | STEP 22–23 (Verified) |
+| **Neural Speech Synthesis & Dubbing Mixing** | Localization | **Available** | STEP 24–28 (Verified) |
 | **Subtitle & Dubbed Multiplex Export** | Localization | *Planned* | STEP 29–31 |
 

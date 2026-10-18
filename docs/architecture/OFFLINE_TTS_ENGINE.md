@@ -192,3 +192,12 @@ The TTS engine drives multi-track speech synthesis and segment regeneration in t
 - **Segment Regeneration with Rollback**: `DubbingManager::regenerate_segment` executes targeted cue re-synthesis while safeguarding the previous working audio asset in case synthesis fails or is cancelled.
 - **Exact Sample Duration**: Timeline placement computes `measured_duration_us` directly from the generated WAV samples, reliably detecting overrun conditions (`cue_overrun_us`) against subtitle intervals without destructive time-stretching.
 
+---
+
+## 10. Integration with Audio Mixing & Multitrack Mixdown (STEP 28)
+
+Synthesized TTS speech feeds directly into the **Professional Audio Mixing & Dubbing Mixdown Subsystem** (`docs/architecture/DUBBING_AUDIO_MIXING.md`):
+- High-quality 22,050 Hz mono Piper WAV speech files are explicitly conformed and resampled to 48,000 Hz stereo 16-bit PCM for professional video alignment.
+- Timeline placement uses sample-accurate delays based on microsecond offsets.
+- Synthesized speech intervals define the automated ducking envelopes that smoothly attenuate the original soundtrack.
+

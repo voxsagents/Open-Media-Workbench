@@ -154,3 +154,12 @@ Aligned audio is never written into the source speech WAV. Instead, an atomic pr
 
 - Operations (`ApplyAlignment`, `RestoreOriginalAudio`, `SetAlignmentMode`, `SetStartOffset`) integrate seamlessly into the 50-step bounded history.
 - Project metadata serializes alignment plans, results, and active asset IDs directly into `SubtitleDocument` metadata (`.omwsub`), guaranteeing offline reopen compatibility.
+
+---
+
+## 9. Downstream Integration with Audio Mixing (STEP 28)
+
+Aligned speech assets directly feed into the **Professional Audio Mixing & Dubbing Mixdown Subsystem** (`docs/architecture/DUBBING_AUDIO_MIXING.md`):
+- The mixdown planner inspects `seg.is_aligned()` and resolves `aligned_audio_asset_id` when present.
+- Prevents double alignment: pre-aligned WAVs are placed directly onto the timeline without re-applying source trimming or tempo scaling.
+- Active speech boundaries from aligned clips define the ducking interval schedule for attenuating the original video soundtrack.

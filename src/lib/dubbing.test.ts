@@ -10,6 +10,15 @@ import {
   getDubbingWaveform,
   saveDubbingToDocument,
   loadDubbingFromDocument,
+  getDubbingMixConfiguration,
+  updateDubbingMixConfiguration,
+  getDubbingMixReadiness,
+  planDubbingMix,
+  startDubbingMixdown,
+  getDubbingMixdownStatus,
+  getDubbingMixdownResult,
+  analyzeDubbingMixAudio,
+  restoreDubbingMixConfiguration,
 } from './dubbing';
 import type { SubtitleDocument } from '../types/subtitles';
 
@@ -239,4 +248,70 @@ describe('Dubbing Timeline Client & Domain Logic', () => {
     const batchResult = await batchAlignDubbingSegments();
     assert.ok(batchResult);
   });
+
+  it('manages dubbing audio mix configuration, presets, and mixdown lifecycle', async () => {
+    const sampleDoc = createSampleDoc();
+    const project = await createDubbingProject(sampleDoc, 'sub-track-1', 'en');
+    const dubTrackId = project.tracks[0].id;
+    await generateDubbingSegments(dubTrackId, sampleDoc);
+
+    // 1. Get initial configuration
+    const config = await getDubbingMixConfiguration();
+    assert.ok(config);
+    assert.equal(config.preset, 'balanced');
+    assert.equal(config.originalAudioEnabled, true);
+    assert.equal(config.originalAudioGainDb, -6.0);
+    assert.equal(config.duckingEnabled, true);
+
+    // 2. Update configuration
+    const updatedConfig = {
+      ...config,
+      duckingAttenuationDb: -16.0,
+      duckingAttackMs: 40,
+    };
+    const updatedProject = await updateDubbingMixConfiguration(updatedConfig);
+    assert.equal(updatedProject.mixConfiguration?.duckingAttenuationDb, -16.0);
+    assert.equal(updatedProject.mixResult, undefined, 'Result must be invalidated on config change');
+
+    // 3. Inspect readiness
+    const readiness = await getDubbingMixReadiness();
+    assert.ok(readiness);
+    assert.equal(readiness.isReady, true);
+    assert.ok(readiness.totalSpeechSegments > 0);
+
+    // 4. Plan mixdown
+    const plan = await planDubbingMix();
+    assert.ok(plan);
+    assert.equal(plan.outputSampleRate, 48000);
+    assert.equal(plan.outputChannels, 2);
+
+    // 5. Start mixdown
+    const mixResult = await startDubbingMixdown();
+    assert.ok(mixResult);
+    assert.equal(mixResult.sampleRate, 48000);
+    assert.equal(mixResult.channels, 2);
+    assert.equal(mixResult.clippingSamples, 0);
+
+    // 6. Query status and result
+    const status = await getDubbingMixdownStatus();
+    assert.equal(status.isRendering, false);
+    const retrieved = await getDubbingMixdownResult();
+    assert.ok(retrieved);
+    assert.equal(retrieved?.mixAssetId, mixResult.mixAssetId);
+
+    // 7. Analyze audio
+    const analysis = await analyzeDubbingMixAudio(mixResult.filePath);
+    assert.ok(analysis);
+    assert.equal(analysis.sampleRate, 48000);
+    assert.equal(analysis.channels, 2);
+    assert.equal(analysis.clippingSamples, 0);
+
+    // 8. Restore preset
+    const restoredVoiceFocus = await restoreDubbingMixConfiguration('voiceFocus');
+    assert.equal(restoredVoiceFocus.mixConfiguration?.preset, 'voiceFocus');
+    assert.equal(restoredVoiceFocus.mixConfiguration?.originalAudioGainDb, -12.0);
+    assert.equal(restoredVoiceFocus.mixConfiguration?.dubbingMasterGainDb, 1.5);
+    assert.equal(restoredVoiceFocus.mixResult, undefined);
+  });
 });
+

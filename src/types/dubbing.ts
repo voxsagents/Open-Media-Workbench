@@ -182,6 +182,8 @@ export interface DubbingProject {
   targetLanguage: string;
   tracks: DubbingTrack[];
   assets: Record<string, DubbingAudioAsset>;
+  mixConfiguration?: DubbingMixConfiguration;
+  mixResult?: DubbingMixResult;
   createdAtEpochMs: number;
   updatedAtEpochMs: number;
 }
@@ -198,6 +200,129 @@ export interface DubbingTimelineWaveform {
   sampleRate: number;
   durationUs: number;
   bins: DubbingWaveformBin[];
+}
+
+export type MixPreset = "balanced" | "voiceFocus" | "preserveOriginal" | "custom";
+
+export interface DubbingMixTrackSettings {
+  trackId: string;
+  isEnabled: boolean;
+  isMuted: boolean;
+  isSolo: boolean;
+  gainDb: number;
+  pan: number;
+}
+
+export interface DubbingMixConfiguration {
+  schemaVersion: number;
+  projectId: string;
+  originalAudioEnabled: boolean;
+  originalAudioGainDb: number;
+  dubbingMasterGainDb: number;
+  trackSettings: Record<string, DubbingMixTrackSettings>;
+  duckingEnabled: boolean;
+  duckingAttenuationDb: number;
+  duckingAttackMs: number;
+  duckingReleaseMs: number;
+  duckingHoldMs: number;
+  fadeInMs: number;
+  fadeOutMs: number;
+  outputSampleRate: number;
+  outputChannels: number;
+  preset: MixPreset;
+  limiterEnabled: boolean;
+  peakCeilingDb: number;
+  updatedAtEpochMs: number;
+}
+
+export interface DubbingMixSegment {
+  segmentId: string;
+  trackId: string;
+  assetId: string;
+  resolvedFilePath: string;
+  timelineStartUs: number;
+  durationUs: number;
+  sourceInUs: number;
+  sourceOutUs: number;
+  gainDb: number;
+  fadeInMs: number;
+  fadeOutMs: number;
+  isAligned: boolean;
+}
+
+export interface DuckingInterval {
+  startUs: number;
+  endUs: number;
+  attackUs: number;
+  releaseUs: number;
+  attenuationDb: number;
+}
+
+export interface DubbingMixPlan {
+  planId: string;
+  projectId: string;
+  timelineDurationUs: number;
+  hasOriginalAudio: boolean;
+  originalAudioPath?: string;
+  originalAudioSampleRate: number;
+  originalAudioChannels: number;
+  originalGainDb: number;
+  dubbingMasterGainDb: number;
+  segments: DubbingMixSegment[];
+  duckingIntervals: DuckingInterval[];
+  outputSampleRate: number;
+  outputChannels: number;
+  filterGraphDesc: string;
+  warnings: string[];
+}
+
+export interface DubbingMixResult {
+  resultId: string;
+  projectId: string;
+  mixAssetId: string;
+  filePath: string;
+  sha256: string;
+  actualDurationUs: number;
+  sampleRate: number;
+  channels: number;
+  bitDepth: number;
+  fileSizeBytes: number;
+  peakDbfs: number;
+  rmsDbfs: number;
+  integratedLufs?: number;
+  clippingSamples: number;
+  warnings: string[];
+  createdAtEpochMs: number;
+}
+
+export interface AudioAnalysisReport {
+  sampleRate: number;
+  channels: number;
+  bitDepth: number;
+  durationUs: number;
+  peakDbfs: number;
+  rmsDbfs: number;
+  integratedLufs?: number;
+  clippingSamples: number;
+}
+
+export interface DubbingMixReadiness {
+  isReady: boolean;
+  hasOriginalAudio: boolean;
+  originalAudioPath?: string;
+  totalSpeechSegments: number;
+  readySpeechSegments: number;
+  missingSpeechSegments: number;
+  hasExistingMix: boolean;
+  isMixStale: boolean;
+  warnings: string[];
+}
+
+export interface DubbingMixdownStatus {
+  isRendering: boolean;
+  progress: number;
+  message: string;
+  error?: string;
 }
 
 export type DubbingOperation =
@@ -223,4 +348,7 @@ export type DubbingOperation =
     }
   | { type: "restoreOriginalAudio"; segmentId: string }
   | { type: "setAlignmentMode"; segmentId: string; mode: DubbingAlignmentMode }
-  | { type: "setStartOffset"; segmentId: string; offsetUs: number };
+  | { type: "setStartOffset"; segmentId: string; offsetUs: number }
+  | { type: "updateMixConfiguration"; configuration: DubbingMixConfiguration }
+  | { type: "applyMixResult"; result: DubbingMixResult }
+  | { type: "invalidateMixResult" };

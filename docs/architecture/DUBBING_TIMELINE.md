@@ -174,3 +174,14 @@ The dubbing timeline seamlessly interfaces with the **Dubbing Duration Alignment
 - `active_audio_asset_id()` selects the active playback asset according to the user-selected alignment mode (`Original`, `AutoFit`, `TempoAdjust`, `PadSilence`, `Manual`).
 - Regenerating speech for a segment invalidates stale alignment plans and results cleanly without deleting original assets.
 
+---
+
+## 10. Integration with Audio Mixing & Multitrack Mixdown (STEP 28)
+
+The dubbing timeline connects directly to the **Professional Audio Mixing & Dubbing Mixdown Subsystem** (`docs/architecture/DUBBING_AUDIO_MIXING.md`):
+- `DubbingTimelinePanel` features a dedicated toolbar toggle mounting `DubbingMixerPanel` alongside the timeline.
+- The mixing planner resolves active speech segments (original or duration-aligned) and track mute/solo policies.
+- Automatically generates dialogue ducking envelopes from active speech intervals, attenuating original soundtracks smoothly without volume pumping.
+- Provides peak-limited multitrack mixdown rendering to 48 kHz stereo 16-bit PCM WAV assets.
+- Live A/B preview player switches instantly between original video audio and the rendered mixdown with stale-mix detection.
+

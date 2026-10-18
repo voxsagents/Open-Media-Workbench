@@ -21,6 +21,7 @@ import {
 } from '../../lib/dubbing';
 import { DubbingSegmentClip } from './DubbingSegmentClip';
 import { DubbingAlignmentInspector } from './DubbingAlignmentInspector';
+import { DubbingMixerPanel } from './DubbingMixerPanel';
 import { Button } from '../../components/ui/Button';
 import {
   SparklesIcon,
@@ -28,6 +29,7 @@ import {
   RedoIcon,
   CheckIcon,
   AlertTriangleIcon,
+  VolumeIcon,
 } from '../../components/ui/Icons';
 
 export interface DubbingTimelinePanelProps {
@@ -60,6 +62,7 @@ export function DubbingTimelinePanel({
   const [generationFeedback, setGenerationFeedback] = useState<string | null>(null);
   const [canUndo, setCanUndo] = useState<boolean>(false);
   const [canRedo, setCanRedo] = useState<boolean>(false);
+  const [showMixerPanel, setShowMixerPanel] = useState<boolean>(false);
 
   // Selected segment helper
   const selectedSegment = useMemo(() => {
@@ -477,6 +480,20 @@ export function DubbingTimelinePanel({
             <span className="text-[11px]">Save Dubbing</span>
           </Button>
 
+          <Button
+            size="xs"
+            variant={showMixerPanel ? "primary" : "secondary"}
+            onClick={() => {
+              setShowMixerPanel(!showMixerPanel);
+              if (!showMixerPanel) setSelectedSegmentId(null);
+            }}
+            className={`text-xs ${showMixerPanel ? 'bg-indigo-600 font-medium text-white shadow-xs' : ''}`}
+            title="Open multitrack audio mixer, ducking controls, and WAV mixdown preview"
+          >
+            <VolumeIcon size={12} className="mr-1 text-indigo-400" />
+            <span className="text-[11px]">Audio Mixer</span>
+          </Button>
+
           {isPlayingAudition && (
             <span className="text-[10px] text-indigo-400 font-mono animate-pulse">
               Auditioning...
@@ -713,7 +730,7 @@ export function DubbingTimelinePanel({
         </div>
 
         {/* Alignment Inspector Drawer (Right sidebar) */}
-        {selectedSegment && (
+        {selectedSegment && !showMixerPanel && (
           <div className="w-84 shrink-0 border-l border-zinc-800 bg-zinc-900/95 overflow-y-auto z-20">
             <DubbingAlignmentInspector
               segment={selectedSegment}
@@ -722,6 +739,21 @@ export function DubbingTimelinePanel({
                 setCanUndo(true);
               }}
               onClose={() => setSelectedSegmentId(null)}
+            />
+          </div>
+        )}
+
+        {/* Audio Mixer Panel (Right sidebar) */}
+        {showMixerPanel && (
+          <div className="w-88 shrink-0 border-l border-zinc-800 bg-zinc-950 overflow-y-auto z-20">
+            <DubbingMixerPanel
+              project={project}
+              asset={asset}
+              onProjectUpdated={(updated) => {
+                setProject(updated);
+                setCanUndo(true);
+              }}
+              onClose={() => setShowMixerPanel(false)}
             />
           </div>
         )}

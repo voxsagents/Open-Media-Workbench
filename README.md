@@ -48,7 +48,7 @@ Open Media Workbench unifies two specialized studio workspaces under a single hi
      - **Persistent Local Recovery History:** Crash-safe, atomic versioned JSON ledger tracking up to 50 previous recovery attempts with status, validation levels, timestamps, and manual history clear action.
      - **Sanitized JSON & Standalone Offline HTML Reports:** User-initiated report export featuring stable machine-readable finding codes, strict Content-Security-Policy, offline embedded dark CSS, XSS escaping, and path privacy sanitization.
 
-2. **Localization Studio** *(Active Development — STEPS 16, 17, 19, 20, 21, 22, 23, 24, 25 & 26 Implemented)*
+2. **Localization Studio** *(Active Development — STEPS 16, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27 & 28 Implemented)*
    - **Canonical Subtitle Domain Model (STEP 16 Implemented):**
      - **Strict Microsecond Timestamps:** Microsecond-accurate integer representation (`MediaTimeUs`), preventing floating-point drift across playback ticks.
      - **Robust SubRip (.srt) Support:** Parsing and serialization supporting UTF-8 BOM, CRLF/LF line endings, multiline cues, and tolerant numbering.
@@ -154,7 +154,18 @@ Open Media Workbench unifies two specialized studio workspaces under a single hi
      - **Manual Alignment & Diagnostics Inspector:** Per-segment manual tempo sliders (0.50x–2.00x), silence padding selector, start offset nudge controls, and grounded sync diagnostics.
      - **Batch Alignment:** Concurrently analyzes, plans, and fits dialogue segments across tracks with partial-success tolerance and cancellation support.
      - **Undo/Redo & Project Persistence:** Fully integrated with 50-step edit history and atomic `.omwsub` project persistence.
-   - **Original Audio Mixing & Multitrack Mixdown** *(Planned STEP 28)*
+   - **Professional Original Audio Mixing & Multitrack Mixdown (STEP 28 Implemented):**
+     - **Original Soundtrack Extraction & No-Audio Support:** Seamlessly decodes and mixes the original video's audio track, or generates clean speech-only mixdowns when videos lack embedded audio streams. Source media remains 100% byte-for-byte immutable.
+     - **Timeline-Based AI Speech Placement:** Positions original Piper TTS WAVs and STEP 27 duration-aligned WAVs with sample-frame precision using FFmpeg `adelay` in sample units, preventing double alignment or re-trimming errors.
+     - **True Decibel Gain Staging:** User controls for original soundtrack volume (-60 dB to +12 dB), dubbing master voice gain, and per-track gains with safe linear amplitude conversions.
+     - **Dialogue Ducking Engine:** Automatically attenuates original soundtrack during active speech intervals with configurable attack (10–300ms), hold plateaus (0–500ms), and release recovery (50–1000ms).
+     - **Ducking Interval Merging:** $O(N \log N)$ chronological speech span merging prevents unnatural volume pumping between rapid dialogue utterances.
+     - **Peak Limiter Protection:** Normalization distortion prevented by explicit `amix=normalize=0`, paired with an unbreakable mastering limiter ceiling (`alimiter=limit=0.891`, -1.0 dBFS).
+     - **Production Mixing Presets:** Verified product presets (`Balanced`, `Voice Focus`, `Preserve Original`, `Custom`) stored with explicit dB parameters.
+     - **Acoustic Loudness & Clipping Analysis:** Genuine measurement of sample peak dBFS, RMS level, integrated LUFS, and clipping sample counts from decoded 16-bit PCM samples.
+     - **Real Offline WAV Mixdown:** Managed, async, cancellation-supported system FFmpeg rendering producing 48 kHz stereo 16-bit PCM WAV assets promoted atomically to durable storage.
+     - **A/B Audio Preview Player:** Live audio player comparing Original Video Audio (Track A) versus Rendered Mixdown (Track B) with instant transport scrubbing and stale-mix change detection.
+     - **Non-Destructive Project Persistence:** Stores complete mixing configurations and mixdown asset fingerprints atomically in `.omwdub` and `.omwsub` project metadata.
    - **Unified Media Export** *(Planned STEP 29)*
    - **Multiplexed Soft Subtitle Export** *(Planned STEP 30)*
 

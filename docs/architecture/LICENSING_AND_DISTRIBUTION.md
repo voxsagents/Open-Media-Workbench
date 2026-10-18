@@ -156,6 +156,7 @@ Because `--enable-gpl` and `--enable-libx264` are activated, the effective licen
 | **Translation Engine (llama.cpp)** | Integrated (Step 22) | MIT License (Runtime CLI) | Local execution; zero cloud APIs |
 | **Translation Engine (Opus-MT)** | Catalog-Only (Step 18) | CC-BY-4.0 | Installation disabled pending Marian runtime integration |
 | **Dubbing Duration Alignment (FFmpeg atempo)** | Integrated (Step 27) | System FFmpeg Subprocess / Safe Rust Native | No bundled GPL binaries; pure system atempo filter & native PCM padding |
+| **Dubbing Audio Mixing & Ducking** | Integrated (Step 28) | System FFmpeg Subprocess / Safe Rust Native | Relies on system FFmpeg filters (amix, volume, afade, adelay, alimiter, ebur128); zero cloud APIs; zero bundled GPL binaries |
 
 ---
 

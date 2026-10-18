@@ -7,15 +7,22 @@ import type { SubtitleDocument } from '../types/subtitles';
 import type { TtsVoiceSettings } from '../types/tts';
 import type {
   AlignmentConfig,
+  AudioAnalysisReport,
   DubbingAlignmentFinding,
   DubbingAlignmentMode,
   DubbingAlignmentPlan,
   DubbingAlignmentResult,
   DubbingAudioAsset,
   DubbingDiagnosticFinding,
+  DubbingMixConfiguration,
+  DubbingMixdownStatus,
+  DubbingMixPlan,
+  DubbingMixReadiness,
+  DubbingMixResult,
   DubbingOperation,
   DubbingProject,
   DubbingTimelineWaveform,
+  MixPreset,
   SilencePaddingMode,
 } from '../types/dubbing';
 
@@ -943,3 +950,254 @@ export async function batchAlignDubbingSegments(
 
   return { ...mockActiveProject };
 }
+
+/**
+ * Default initial mix configuration.
+ */
+export function createDefaultMixConfiguration(projectId: string): DubbingMixConfiguration {
+  return {
+    schemaVersion: 1,
+    projectId,
+    originalAudioEnabled: true,
+    originalAudioGainDb: -6.0,
+    dubbingMasterGainDb: 0.0,
+    trackSettings: {},
+    duckingEnabled: true,
+    duckingAttenuationDb: -12.0,
+    duckingAttackMs: 50,
+    duckingReleaseMs: 250,
+    duckingHoldMs: 100,
+    fadeInMs: 0,
+    fadeOutMs: 0,
+    outputSampleRate: 48000,
+    outputChannels: 2,
+    preset: 'balanced',
+    limiterEnabled: true,
+    peakCeilingDb: -1.0,
+    updatedAtEpochMs: Date.now(),
+  };
+}
+
+/**
+ * Retrieves the mixing configuration for the active dubbing project.
+ */
+export async function getDubbingMixConfiguration(): Promise<DubbingMixConfiguration> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingMixConfiguration>('get_dubbing_mix_configuration');
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+  if (!mockActiveProject.mixConfiguration) {
+    mockActiveProject.mixConfiguration = createDefaultMixConfiguration(mockActiveProject.id);
+  }
+  return { ...mockActiveProject.mixConfiguration };
+}
+
+/**
+ * Updates the mixing configuration on the active dubbing project.
+ */
+export async function updateDubbingMixConfiguration(
+  configuration: DubbingMixConfiguration
+): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('update_dubbing_mix_configuration', { configuration });
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+  mockActiveProject.mixConfiguration = { ...configuration, updatedAtEpochMs: Date.now() };
+  mockActiveProject.mixResult = undefined; // Invalidate stale result
+  return { ...mockActiveProject };
+}
+
+/**
+ * Inspects readiness to execute an audio mixdown.
+ */
+export async function getDubbingMixReadiness(
+  mediaPathOverride?: string
+): Promise<DubbingMixReadiness> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingMixReadiness>('get_dubbing_mix_readiness', { mediaPathOverride });
+  }
+
+  if (!mockActiveProject) {
+    return {
+      isReady: false,
+      hasOriginalAudio: false,
+      totalSpeechSegments: 0,
+      readySpeechSegments: 0,
+      missingSpeechSegments: 0,
+      hasExistingMix: false,
+      isMixStale: false,
+      warnings: ['No active dubbing project'],
+    };
+  }
+
+  const total = mockActiveProject.tracks.reduce((acc, t) => acc + t.segments.length, 0);
+  const ready = total;
+  const hasExisting = !!mockActiveProject.mixResult;
+
+  return {
+    isReady: total > 0,
+    hasOriginalAudio: !!mockActiveProject.mediaReference,
+    originalAudioPath: mockActiveProject.mediaReference,
+    totalSpeechSegments: total,
+    readySpeechSegments: ready,
+    missingSpeechSegments: 0,
+    hasExistingMix: hasExisting,
+    isMixStale: false,
+    warnings: [],
+  };
+}
+
+/**
+ * Generates the deterministic mixdown plan.
+ */
+export async function planDubbingMix(
+  mediaPathOverride?: string
+): Promise<DubbingMixPlan> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingMixPlan>('plan_dubbing_mix', { mediaPathOverride });
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+  const config = mockActiveProject.mixConfiguration || createDefaultMixConfiguration(mockActiveProject.id);
+
+  return {
+    planId: `plan-${Date.now()}`,
+    projectId: mockActiveProject.id,
+    timelineDurationUs: mockActiveProject.timelineDurationUs,
+    hasOriginalAudio: !!mockActiveProject.mediaReference,
+    originalAudioPath: mockActiveProject.mediaReference,
+    originalAudioSampleRate: 48000,
+    originalAudioChannels: 2,
+    originalGainDb: config.originalAudioGainDb,
+    dubbingMasterGainDb: config.dubbingMasterGainDb,
+    segments: [],
+    duckingIntervals: [],
+    outputSampleRate: 48000,
+    outputChannels: 2,
+    filterGraphDesc: 'mock_filter_graph',
+    warnings: [],
+  };
+}
+
+/**
+ * Initiates an offline multitrack mixdown render.
+ */
+export async function startDubbingMixdown(
+  mediaPathOverride?: string
+): Promise<DubbingMixResult> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingMixResult>('start_dubbing_mixdown', { mediaPathOverride });
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+
+  const result: DubbingMixResult = {
+    resultId: `mix-${Date.now()}`,
+    projectId: mockActiveProject.id,
+    mixAssetId: `mix_asset_${Date.now()}`,
+    filePath: `/tmp/mock_mixdown_${mockActiveProject.id}.wav`,
+    sha256: 'mock_sha256_hash_1234567890abcdef',
+    actualDurationUs: mockActiveProject.timelineDurationUs,
+    sampleRate: 48000,
+    channels: 2,
+    bitDepth: 16,
+    fileSizeBytes: 384000,
+    peakDbfs: -1.0,
+    rmsDbfs: -18.2,
+    integratedLufs: -19.5,
+    clippingSamples: 0,
+    warnings: [],
+    createdAtEpochMs: Date.now(),
+  };
+
+  mockActiveProject.mixResult = result;
+  return result;
+}
+
+/**
+ * Queries the status of an ongoing mixdown operation.
+ */
+export async function getDubbingMixdownStatus(): Promise<DubbingMixdownStatus> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingMixdownStatus>('get_dubbing_mixdown_status');
+  }
+
+  return {
+    isRendering: false,
+    progress: 1.0,
+    message: 'Mixdown complete',
+  };
+}
+
+/**
+ * Cancels an active mixdown process.
+ */
+export async function cancelDubbingMixdown(): Promise<void> {
+  if (isTauriEnvironment()) {
+    await invoke<void>('cancel_dubbing_mixdown');
+  }
+}
+
+/**
+ * Retrieves the currently active mixdown result.
+ */
+export async function getDubbingMixdownResult(): Promise<DubbingMixResult | null> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingMixResult | null>('get_dubbing_mixdown_result');
+  }
+
+  return mockActiveProject?.mixResult || null;
+}
+
+/**
+ * Measures acoustics, loudness, peaks, and clipping of an audio file.
+ */
+export async function analyzeDubbingMixAudio(filePath: string): Promise<AudioAnalysisReport> {
+  if (isTauriEnvironment()) {
+    return await invoke<AudioAnalysisReport>('analyze_dubbing_mix_audio', { filePath });
+  }
+
+  return {
+    sampleRate: 48000,
+    channels: 2,
+    bitDepth: 16,
+    durationUs: 5000000,
+    peakDbfs: -1.0,
+    rmsDbfs: -18.2,
+    integratedLufs: -19.5,
+    clippingSamples: 0,
+  };
+}
+
+/**
+ * Restores configuration to a preset.
+ */
+export async function restoreDubbingMixConfiguration(preset: MixPreset): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('restore_dubbing_mix_configuration', { preset });
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+  const [origGain, dubGain, duckAtt] = (() => {
+    switch (preset) {
+      case 'voiceFocus': return [-12.0, 1.5, -18.0] as const;
+      case 'preserveOriginal': return [0.0, -1.0, -6.0] as const;
+      case 'balanced':
+      default:
+        return [-6.0, 0.0, -12.0] as const;
+    }
+  })();
+
+  const config = createDefaultMixConfiguration(mockActiveProject.id);
+  config.preset = preset;
+  config.originalAudioGainDb = origGain;
+  config.dubbingMasterGainDb = dubGain;
+  config.duckingAttenuationDb = duckAtt;
+
+  mockActiveProject.mixConfiguration = config;
+  mockActiveProject.mixResult = undefined;
+  return { ...mockActiveProject };
+}
+
