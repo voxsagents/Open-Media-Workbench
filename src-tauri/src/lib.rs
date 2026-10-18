@@ -34,6 +34,8 @@ pub fn run() {
     let tts_state = commands::TtsState::new(ai_state.manager.storage().clone());
     let voice_library_state =
         commands::VoiceLibraryState::default_local(Arc::new(ai_state.manager.storage().clone()));
+    let dubbing_state =
+        commands::DubbingState::default_local(Arc::new(ai_state.manager.storage().clone()));
 
     tauri::Builder::default()
         .manage(commands::MediaEngineState::default())
@@ -48,6 +50,7 @@ pub fn run() {
         .manage(translation_review_state)
         .manage(tts_state)
         .manage(voice_library_state)
+        .manage(dubbing_state)
         .register_uri_scheme_protocol("opentake-media", |app, req| {
             protocol::media::handle_media_protocol(app, req)
         })
@@ -170,6 +173,21 @@ pub fn run() {
             commands::voices::remove_voice_assignment_command,
             commands::voices::set_project_default_voice_command,
             commands::voices::get_project_voice_assignments_command,
+            commands::dubbing::create_dubbing_project,
+            commands::dubbing::get_active_dubbing_project,
+            commands::dubbing::set_active_dubbing_project,
+            commands::dubbing::load_dubbing_from_document,
+            commands::dubbing::save_dubbing_to_document,
+            commands::dubbing::save_dubbing_to_file,
+            commands::dubbing::load_dubbing_from_file,
+            commands::dubbing::generate_dubbing_segments,
+            commands::dubbing::regenerate_dubbing_segment,
+            commands::dubbing::apply_dubbing_operation,
+            commands::dubbing::undo_dubbing_operation,
+            commands::dubbing::redo_dubbing_operation,
+            commands::dubbing::get_dubbing_waveform,
+            commands::dubbing::get_dubbing_diagnostics,
+            commands::dubbing::get_dubbing_asset_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenTake desktop application");

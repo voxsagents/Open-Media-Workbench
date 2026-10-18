@@ -2,7 +2,7 @@
 
 > **Free, open-source, offline-first desktop media recovery and AI localization studio.**
 
-[![Status](https://img.shields.io/badge/Status-STEP%2024%20Offline%20Text--to--Speech%20Complete-success.svg)](docs/reports/STEP_24_REPORT.md)
+[![Status](https://img.shields.io/badge/Status-STEP%2026%20AI%20Dubbing%20Timeline%20Complete-success.svg)](docs/reports/STEP_26_REPORT.md)
 [![Architecture](https://img.shields.io/badge/Architecture-Dual%20Workspace-indigo.svg)](docs/architecture/OPEN_MEDIA_WORKBENCH.md)
 
 
@@ -48,7 +48,7 @@ Open Media Workbench unifies two specialized studio workspaces under a single hi
      - **Persistent Local Recovery History:** Crash-safe, atomic versioned JSON ledger tracking up to 50 previous recovery attempts with status, validation levels, timestamps, and manual history clear action.
      - **Sanitized JSON & Standalone Offline HTML Reports:** User-initiated report export featuring stable machine-readable finding codes, strict Content-Security-Policy, offline embedded dark CSS, XSS escaping, and path privacy sanitization.
 
-2. **Localization Studio** *(Active Development — STEPS 16, 17, 19, 20, 21, 22, 23, 24 & 25 Implemented)*
+2. **Localization Studio** *(Active Development — STEPS 16, 17, 19, 20, 21, 22, 23, 24, 25 & 26 Implemented)*
    - **Canonical Subtitle Domain Model (STEP 16 Implemented):**
      - **Strict Microsecond Timestamps:** Microsecond-accurate integer representation (`MediaTimeUs`), preventing floating-point drift across playback ticks.
      - **Robust SubRip (.srt) Support:** Parsing and serialization supporting UTF-8 BOM, CRLF/LF line endings, multiline cues, and tolerant numbering.
@@ -131,7 +131,19 @@ Open Media Workbench unifies two specialized studio workspaces under a single hi
      - **Voice Preferences & Favorites:** Persistent favorites, recents, global preferred default voice, and last selected speaker variant saved atomically in `voice_preferences.json`.
      - **Track-Level Voice & Speaker Assignments:** Non-destructively binds voices and multi-speaker variants to subtitle tracks and establishes project defaults in `SubtitleDocument.metadata.voiceAssignments` without altering subtitle text or timestamps.
      - **Text-to-Speech Integration:** Seamless canonical voice synchronization between Voice Library, `LocalizationInspector`, and `TextToSpeechPanel`.
-   - **Dubbing Timeline & Audio Synchronization** *(Planned STEP 26)*
+   - **Professional AI Dubbing Timeline (STEP 26 Implemented):**
+     - **Non-Destructive Multi-Track Audio Editor:** Dedicated Dubbing Timeline workspace in Localization Studio displaying reference video, original audio, source subtitles, translated subtitles, and AI speech tracks.
+     - **Microsecond Timeline Coordinates:** Integer microsecond (`MediaTimeUs`) timeline positioning, trim points (`source_in_us`, `source_out_us`), and duration arithmetic preventing rounding drift.
+     - **Authentic Waveform Peak Extraction:** Safe 16-bit PCM WAV decimation extracting real min/max peak bins for trimmed clip bounds without fabricated shapes or decoding whole files on render.
+     - **Full Non-Destructive Operation Suite:** Move segments, trim start (head trim), trim end (tail trim), split at playhead into adjacent non-overlapping segments, duplicate, delete, and adjust gain without mutating underlying audio files.
+     - **Durable Managed Audio Storage:** Automatically stores generated dialogue WAV assets in `~/.local/share/opentake/dubbing/assets` with content hashing and reference counting. Survives application restarts without broken temporary paths.
+     - **Secure Byte-Range Streaming Protocol:** Streams generated WAV audio to the UI using custom `opentake-media://localhost/{asset_id}` protocol handler with byte-range support, without exposing raw filesystem paths.
+     - **Automatic Cue-to-Segment Placement:** Places generated speech segments at corresponding subtitle cue start times, computing exact duration and flagging timing overruns.
+     - **Rollback-Safe Segment Regeneration:** Re-synthesizes speech with Piper TTS on demand; if generation fails, the previous working asset remains active without damaging manual trims.
+     - **Comprehensive Diagnostic Engine:** Interval-based $O(N \log N)$ scan detecting segment overlaps, cue overruns, missing assets, unresolved voice assignments, and large dialogue gaps.
+     - **50-Step Undo/Redo History:** In-memory command stack supporting undo/redo for move, trim, split, delete, duplicate, and track reordering.
+     - **Shared Video Playhead Synchronization:** Authoritative synchronized playhead between video player, time ruler, subtitle cues, and audio clips with audition controls, mute, and solo.
+     - **Crash-Safe Project Persistence:** Stores complete dubbing timeline projects atomically to disk and embeds state losslessly into `SubtitleDocument.metadata.dubbingProject` for `.omwsub` project files.
    - **Speech Duration Alignment** *(Planned STEP 27)*
    - **Dialogue Mixing & Video Dubbing Export** *(Planned STEP 28)*
    - **Multiplexed Soft Subtitle Export** *(Planned STEP 30)*

@@ -100,3 +100,12 @@ pub use voices::{
     set_preferred_voice, set_project_default_voice_command, start_voice_preview,
     toggle_voice_favorite, VoiceLibraryState,
 };
+
+pub mod dubbing;
+pub use dubbing::{
+    apply_dubbing_operation, create_dubbing_project, generate_dubbing_segments,
+    get_active_dubbing_project, get_dubbing_asset_url, get_dubbing_diagnostics,
+    get_dubbing_waveform, load_dubbing_from_document, load_dubbing_from_file,
+    redo_dubbing_operation, regenerate_dubbing_segment, save_dubbing_to_document,
+    save_dubbing_to_file, set_active_dubbing_project, undo_dubbing_operation, DubbingState,
+};

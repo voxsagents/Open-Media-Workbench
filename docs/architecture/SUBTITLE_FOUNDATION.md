@@ -240,3 +240,14 @@ See [AI_VOICE_LIBRARY.md](AI_VOICE_LIBRARY.md) for full details on:
 - Multi-speaker variant selection persisted per track assignment.
 - Absolute cue immutability: assigning voices alters zero subtitle cues or timestamps.
 - Forward compatibility: establishes clear assignment contracts for STEP 26 timeline construction.
+
+---
+
+## 15. Professional AI Dubbing Timeline (STEP 26)
+
+See [DUBBING_TIMELINE.md](DUBBING_TIMELINE.md) for full details on:
+- Non-destructive multi-track audio segment timeline editing coupled to subtitle cues.
+- Real 16-bit PCM WAV peak extraction without full-file decoding or decorative waveforms.
+- Move, head trim, tail trim, split, duplicate, and delete operations on speech segments.
+- Complete subtitle cue and media file immutability: subtitle text, display intervals, and source media files remain 100% unaltered.
+- Complete dubbing project state persisted in `.omwsub` project files via `SubtitleDocument.metadata["dubbingProject"]`.

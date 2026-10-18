@@ -9,7 +9,7 @@
     "build": "tsc && vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/lib/preferences.test.ts src/lib/mediaEngine.test.ts src/lib/mediaImport.test.ts src/lib/playback.test.ts src/lib/waveform.test.ts src/lib/workspace.test.ts src/lib/repair.test.ts src/lib/subtitles.test.ts src/lib/subtitleOperations.test.ts src/lib/aiManager.test.ts src/lib/transcription.test.ts src/lib/alignment.test.ts src/lib/styling.test.ts src/lib/translation.test.ts src/lib/translationReview.test.ts src/lib/tts.test.ts src/lib/voices.test.ts",
+    "test": "tsx --test src/lib/preferences.test.ts src/lib/mediaEngine.test.ts src/lib/mediaImport.test.ts src/lib/playback.test.ts src/lib/waveform.test.ts src/lib/workspace.test.ts src/lib/repair.test.ts src/lib/subtitles.test.ts src/lib/subtitleOperations.test.ts src/lib/aiManager.test.ts src/lib/transcription.test.ts src/lib/alignment.test.ts src/lib/styling.test.ts src/lib/translation.test.ts src/lib/translationReview.test.ts src/lib/tts.test.ts src/lib/voices.test.ts src/lib/dubbing.test.ts",
 
     "tauri": "tauri"
   },

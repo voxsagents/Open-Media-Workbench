@@ -186,4 +186,14 @@ The Subtitle Editor directly integrates with the offline Whisper transcription e
 - Real-time diagnostics display findings such as `PROTECTED_TERM_CHANGED`, `EMPTY_TARGET_TEXT`, and `EXCESSIVE_READING_SPEED`.
 - Approved translations populate a local Translation Memory (TM) database, surfacing 100% exact match suggestions for repeated phrases with one-click adoption.
 
+---
+
+## 12. Coordination with Dubbing Timeline (STEP 26)
+
+The Subtitle Editor remains the authoritative tool for text caption manipulation while coordinating with the dedicated Dubbing Timeline panel (`DubbingTimelinePanel.tsx`):
+- **Coexistence without Replacement:** The Dubbing Timeline is accessible via the "Dubbing" tab in Localization Studio, providing a multi-track audio segment editor without replacing or altering the core Subtitle Editor.
+- **Shared Master Playhead:** Seeking in the Subtitle Editor, video player, or Dubbing Timeline stays 100% synchronized through the shared `currentTime` and `seekTo` interfaces.
+- **Cue References:** Dubbing segments retain immutable references to their underlying subtitle cues (`source_subtitle_cue_id`, `original_cue_start_us`, `original_cue_end_us`), surfacing overrun diagnostics without altering original cue boundaries.
+- **Unified Document Persistence:** Saving changes in either the Subtitle Editor or Dubbing Timeline updates the unified `.omwsub` project document without conflict.
+
 

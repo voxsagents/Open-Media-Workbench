@@ -182,3 +182,13 @@ The TTS engine provides the underlying speech synthesis foundation for the STEP 
 - **Canonical Voice Identity**: Both `TextToSpeechPanel` and `VoiceLibraryPanel` resolve voices against the canonical catalog, honoring project track assignments and user preferences.
 - **Shared Model Locking**: Previews acquire model locks in `AiStorageManager` during synthesis to prevent concurrent file mutations.
 
+---
+
+## 9. Integration with Professional AI Dubbing Timeline (STEP 26)
+
+The TTS engine drives multi-track speech synthesis and segment regeneration in the STEP 26 Dubbing Timeline (`crates/opentake-core/src/localization/dubbing/`):
+- **Batch Cue Synthesis**: `DubbingManager::synthesize_and_place_cues` routes subtitle cue text through `TtsManager`, generating genuine 16-bit PCM WAV audio for each selected cue.
+- **Durable Asset Promotion**: Staged TTS audio files are atomically imported into durable dubbing storage (`~/.local/share/opentake/dubbing/assets`), decoupling saved projects from temporary staging directories.
+- **Segment Regeneration with Rollback**: `DubbingManager::regenerate_segment` executes targeted cue re-synthesis while safeguarding the previous working audio asset in case synthesis fails or is cancelled.
+- **Exact Sample Duration**: Timeline placement computes `measured_duration_us` directly from the generated WAV samples, reliably detecting overrun conditions (`cue_overrun_us`) against subtitle intervals without destructive time-stretching.
+

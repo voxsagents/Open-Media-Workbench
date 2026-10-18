@@ -171,7 +171,17 @@ The foundational work completed across STEPS 1 through 9 remains completely pres
   - **Voice Preferences & Favorites:** Persistent favorites, recents, global preferred default voice, and last selected speaker variant saved atomically in `voice_preferences.json`.
   - **Track-Level Voice & Speaker Assignments:** Non-destructively binds voices and multi-speaker variants to subtitle tracks and establishes project defaults in `SubtitleDocument.metadata.voiceAssignments` without altering subtitle text or timestamps.
   - **Text-to-Speech Integration:** Seamless canonical voice synchronization between Voice Library, `LocalizationInspector`, and `TextToSpeechPanel`.
-- **Dubbing Timeline & Audio Synchronization (Planned STEP 26)**
+- **Professional AI Dubbing Timeline (STEP 26 Implemented):**
+  - **Multi-Track Non-Destructive Audio Editor:** Dedicated Dubbing Timeline workspace in Localization Studio displaying reference video, original audio, source subtitles, translated subtitles, and AI speech tracks.
+  - **Microsecond Timeline Invariants:** Integer microsecond coordinates (`MediaTimeUs`), non-destructive trim boundaries (`source_in_us`, `source_out_us`), and exact duration arithmetic.
+  - **Real PCM Waveform Extraction:** Authentically extracts min/max peak bins directly from 16-bit PCM WAV assets without decorative fabrication or render decoding overhead.
+  - **Non-Destructive Operations:** Move, trim start, trim end, split at playhead into adjacent non-overlapping segments, duplicate, and delete without rewriting underlying audio files.
+  - **Durable Audio Asset Storage:** Manages generated WAV assets in `~/.local/share/opentake/dubbing/assets` with content hashing, surviving application restarts.
+  - **Secure Audio Streaming Protocol:** Streams audio safely to the UI via `opentake-media://localhost/{asset_id}` byte-range protocol handler.
+  - **Automatic Cue-to-Segment Placement:** Places generated speech segments at corresponding subtitle cue start times, detecting timing overruns.
+  - **Rollback-Safe Regeneration:** Re-synthesizes speech with Piper TTS on demand with automatic fallback retention if generation fails.
+  - **Interval-Based Diagnostics:** Efficient $O(N \log N)$ scan detecting segment overlaps, cue overruns, missing assets, unresolved voices, and large dialogue gaps.
+  - **50-Step Undo/Redo & Project Persistence:** Deterministic in-memory command stack with lossless `.omwsub` project metadata embedding.
 - **Speech Duration Alignment (Planned STEP 27)**
 - **Dialogue Mixing & Video Dubbing Export (Planned STEP 28)**
 - **Multiplexed Soft Subtitle Export (Planned STEP 30):**

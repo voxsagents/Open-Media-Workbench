@@ -32,6 +32,7 @@ import { BilingualReviewPanel } from "./BilingualReviewPanel";
 import { GlossaryManagerPanel } from "./GlossaryManagerPanel";
 import { TextToSpeechPanel } from "./TextToSpeechPanel";
 import { VoiceLibraryPanel } from "./VoiceLibraryPanel";
+import { DubbingTimelinePanel } from "./DubbingTimelinePanel";
 import type { SubtitleStyle } from "../../types/styling";
 import { DEFAULT_SUBTITLE_STYLE } from "../../lib/styling";
 
@@ -108,6 +109,7 @@ export function LocalizationInspector({
   const [exportFormat, setExportFormat] = useState<SubtitleFormat>("srt");
   const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [dubbingMode, setDubbingMode] = useState<"timeline" | "script">("timeline");
 
   const handleTabClick = (tab: LocalizationTab) => {
     setInternalTab(tab);
@@ -467,16 +469,60 @@ export function LocalizationInspector({
           </div>
         )}
 
-        {/* SPEECH / TTS PANEL (STEP 24 Active) */}
+        {/* DUBBING & SPEECH PANEL (STEP 26 Active) */}
         {activeTab === "dubbing" && (
-          <div id="loc-panel-dubbing" role="tabpanel" aria-labelledby="loc-tab-dubbing" className="h-full overflow-hidden">
-            <TextToSpeechPanel
-              document={document}
-              activeTrack={activeTrack}
-              onOpenModelManager={() => setShowModelManager(true)}
-              onOpenVoiceLibrary={() => handleTabClick("voices")}
-              onSeek={onSeek}
-            />
+          <div id="loc-panel-dubbing" role="tabpanel" aria-labelledby="loc-tab-dubbing" className="h-full flex flex-col overflow-hidden">
+            {/* Dubbing sub-mode toggle */}
+            <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 bg-zinc-900/80 shrink-0">
+              <span className="text-[11px] font-semibold text-zinc-300">AI Dubbing Studio</span>
+              <div className="flex items-center space-x-1 bg-zinc-950 p-0.5 rounded border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setDubbingMode("timeline")}
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    dubbingMode === "timeline"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Dubbing Timeline
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDubbingMode("script")}
+                  className={`px-2 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    dubbingMode === "script"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  Script TTS
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              {dubbingMode === "timeline" ? (
+                <DubbingTimelinePanel
+                  document={document}
+                  activeTrack={activeTrack}
+                  asset={asset}
+                  currentTime={currentTime}
+                  onSeek={onSeek}
+                  onDocumentChange={onDocumentChange}
+                  onOpenVoiceLibrary={() => handleTabClick("voices")}
+                  onOpenModelManager={() => setShowModelManager(true)}
+                />
+              ) : (
+                <TextToSpeechPanel
+                  document={document}
+                  activeTrack={activeTrack}
+                  onOpenModelManager={() => setShowModelManager(true)}
+                  onOpenVoiceLibrary={() => handleTabClick("voices")}
+                  onSeek={onSeek}
+                />
+              )}
+            </div>
           </div>
         )}
 

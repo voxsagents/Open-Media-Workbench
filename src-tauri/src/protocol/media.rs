@@ -67,33 +67,53 @@ pub fn handle_media_protocol<R: Runtime>(
         library_state.session.get_asset_by_id(asset_id).await
     });
 
-    let Some(asset) = asset_opt else {
-        return Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header("Content-Type", "text/plain")
-            .body(b"Media asset not found or authorization revoked".to_vec())
-            .unwrap();
-    };
+    let (file_to_serve, mime_type) = if let Some(asset) = asset_opt {
+        let file_path = if is_proxy_requested {
+            let playback_state = app.state::<PlaybackState>();
+            let cached_proxy = tauri::async_runtime::block_on(async {
+                playback_state.proxy_engine.find_cached_proxy(&asset).await
+            });
 
-    // 4. Resolve the target file path (Original Source vs Preview Proxy)
-    let file_to_serve: PathBuf = if is_proxy_requested {
-        let playback_state = app.state::<PlaybackState>();
-        let cached_proxy = tauri::async_runtime::block_on(async {
-            playback_state.proxy_engine.find_cached_proxy(&asset).await
-        });
-
-        match cached_proxy {
-            Some(mapping) => mapping.proxy_path,
-            None => {
-                return Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .header("Content-Type", "text/plain")
-                    .body(b"Preview proxy not available for this asset".to_vec())
-                    .unwrap();
+            match cached_proxy {
+                Some(mapping) => mapping.proxy_path,
+                None => {
+                    return Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .header("Content-Type", "text/plain")
+                        .body(b"Preview proxy not available for this asset".to_vec())
+                        .unwrap();
+                }
             }
-        }
+        } else {
+            PathBuf::from(&asset.source.canonical_path)
+        };
+        let format_hint = Some(asset.metadata.container.format_name.as_str());
+        let mime = determine_mime_type(&file_path, format_hint);
+        (file_path, mime)
     } else {
-        PathBuf::from(&asset.source.canonical_path)
+        // Fallback: check if asset_id is an active dubbing audio asset
+        let dubbing_file =
+            if let Some(dub_state) = app.try_state::<crate::commands::dubbing::DubbingState>() {
+                tauri::async_runtime::block_on(async {
+                    let guard = dub_state.active_project.read().await;
+                    guard
+                        .as_ref()
+                        .and_then(|p| p.assets.get(asset_id).map(|a| a.file_path.clone()))
+                })
+            } else {
+                None
+            };
+
+        if let Some(file_path) = dubbing_file {
+            let mime = determine_mime_type(&file_path, Some("wav"));
+            (file_path, mime)
+        } else {
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .header("Content-Type", "text/plain")
+                .body(b"Media asset not found or authorization revoked".to_vec())
+                .unwrap();
+        }
     };
 
     // 5. Verify file on disk
@@ -114,8 +134,6 @@ pub fn handle_media_protocol<R: Runtime>(
     };
 
     let file_size = metadata.len();
-    let format_hint = Some(asset.metadata.container.format_name.as_str());
-    let mime_type = determine_mime_type(&file_to_serve, format_hint);
 
     // 6. Handle Range Request
     let range_header = req

@@ -1,3 +1,4 @@
+pub mod dubbing;
 pub mod styling;
 pub mod subtitles;
 

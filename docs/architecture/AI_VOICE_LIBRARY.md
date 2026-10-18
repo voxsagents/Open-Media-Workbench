@@ -137,3 +137,12 @@ Voice assignments:
 - Do not alter subtitle cue start/end timings.
 - Do not synthesize speech automatically upon assignment.
 - Provide contracts for STEP 26 timeline construction.
+
+---
+
+## 8. Dubbing Timeline Integration (STEP 26)
+
+The Dubbing Timeline in STEP 26 consumes track voice assignments directly from `SubtitleDocument.metadata["voiceAssignments"]`:
+- **Timeline Track Initialization**: When creating dubbing tracks from subtitle tracks, `DubbingManager` reads the assigned `voice_id` and `speaker_id` to establish speech synthesis configuration.
+- **Compatibility Verification**: Voice assignments are validated against installed catalog voices before triggering batch synthesis or per-segment regeneration. Uninstalled voices surface `UNRESOLVED_VOICE_ASSIGNMENT` diagnostics.
+- **Per-Track & Segment Configuration**: Users can reassign voices on timeline tracks or individual segments directly within `DubbingTimelinePanel`, seamlessly syncing changes back into project state.
