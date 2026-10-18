@@ -155,6 +155,7 @@ Because `--enable-gpl` and `--enable-libx264` are activated, the effective licen
 | **Qwen 2.5 Text Models** | Verified Catalog (Step 18/22) | Apache-2.0 License (Weights) | Explicit opt-in download; zero bundling |
 | **Translation Engine (llama.cpp)** | Integrated (Step 22) | MIT License (Runtime CLI) | Local execution; zero cloud APIs |
 | **Translation Engine (Opus-MT)** | Catalog-Only (Step 18) | CC-BY-4.0 | Installation disabled pending Marian runtime integration |
+| **Dubbing Duration Alignment (FFmpeg atempo)** | Integrated (Step 27) | System FFmpeg Subprocess / Safe Rust Native | No bundled GPL binaries; pure system atempo filter & native PCM padding |
 
 ---
 

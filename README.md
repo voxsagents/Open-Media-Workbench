@@ -144,8 +144,18 @@ Open Media Workbench unifies two specialized studio workspaces under a single hi
      - **50-Step Undo/Redo History:** In-memory command stack supporting undo/redo for move, trim, split, delete, duplicate, and track reordering.
      - **Shared Video Playhead Synchronization:** Authoritative synchronized playhead between video player, time ruler, subtitle cues, and audio clips with audition controls, mute, and solo.
      - **Crash-Safe Project Persistence:** Stores complete dubbing timeline projects atomically to disk and embeds state losslessly into `SubtitleDocument.metadata.dubbingProject` for `.omwsub` project files.
-   - **Speech Duration Alignment** *(Planned STEP 27)*
-   - **Dialogue Mixing & Video Dubbing Export** *(Planned STEP 28)*
+   - **Professional AI Dubbing Duration Alignment (STEP 27 Implemented):**
+     - **Grounded Speech Duration Analysis:** Compares genuine synthesized speech sample durations against subtitle window boundaries using integer microsecond precision.
+     - **Deterministic AutoFit Planner:** Conservative default tempo policy (0.85x–1.15x; max automatic limit 1.25x); exact fits preserve 1.0x tempo, shorter speech uses silence padding, moderate overruns are accelerated, and extreme overruns (>1.25x or >2.0x) are flagged as `NeedsReview`.
+     - **Pitch-Preserving Tempo Engine:** System FFmpeg `atempo` filter execution with chained stages for extended ranges, structured shell-less execution, and sample-aware duration measurement.
+     - **Sample-Accurate Silence Padding:** Pure 16-bit PCM sample buffer padding supporting `PadEnd`, `PadStart`, and `Centered` modes with zero filter rounding latency.
+     - **True Non-Destructive Asset Preservation:** Original Piper TTS audio assets remain byte-identical; aligned outputs are stored atomically in durable content-addressed storage (`aligned_{hash}.wav`).
+     - **Real-Time A/B Audio Audition:** True A/B playback comparing original speech vs processed aligned audio over secure `opentake-media://` protocol.
+     - **Manual Alignment & Diagnostics Inspector:** Per-segment manual tempo sliders (0.50x–2.00x), silence padding selector, start offset nudge controls, and grounded sync diagnostics.
+     - **Batch Alignment:** Concurrently analyzes, plans, and fits dialogue segments across tracks with partial-success tolerance and cancellation support.
+     - **Undo/Redo & Project Persistence:** Fully integrated with 50-step edit history and atomic `.omwsub` project persistence.
+   - **Original Audio Mixing & Multitrack Mixdown** *(Planned STEP 28)*
+   - **Unified Media Export** *(Planned STEP 29)*
    - **Multiplexed Soft Subtitle Export** *(Planned STEP 30)*
 
 3. **Shared Local AI Model Manager** *(Infrastructure Foundation — STEP 18 Implemented)*

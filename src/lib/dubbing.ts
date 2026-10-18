@@ -6,10 +6,17 @@ import { invoke } from '@tauri-apps/api/core';
 import type { SubtitleDocument } from '../types/subtitles';
 import type { TtsVoiceSettings } from '../types/tts';
 import type {
+  AlignmentConfig,
+  DubbingAlignmentFinding,
+  DubbingAlignmentMode,
+  DubbingAlignmentPlan,
+  DubbingAlignmentResult,
+  DubbingAudioAsset,
   DubbingDiagnosticFinding,
   DubbingOperation,
   DubbingProject,
   DubbingTimelineWaveform,
+  SilencePaddingMode,
 } from '../types/dubbing';
 
 function isTauriEnvironment(): boolean {
@@ -442,6 +449,88 @@ export async function applyDubbingOperation(
       }
       break;
     }
+    case 'applyAlignment': {
+      mockActiveProject.assets[operation.alignedAsset.assetId] = operation.alignedAsset;
+      for (const t of mockActiveProject.tracks) {
+        const seg = t.segments.find((s) => s.id === operation.segmentId);
+        if (seg) {
+          if (!seg.originalAudioAssetId) {
+            seg.originalAudioAssetId = seg.audioAssetId;
+          }
+          seg.alignedAudioAssetId = operation.alignedAsset.assetId;
+          seg.audioAssetId = operation.alignedAsset.assetId;
+          seg.alignmentPlan = operation.plan;
+          seg.alignmentResult = operation.result;
+          seg.alignmentMode = 'autoFit';
+          seg.startOffsetUs = operation.plan.requestedStartOffsetUs;
+          seg.sourceInUs = 0;
+          seg.sourceOutUs = operation.result.actualOutputDurationUs;
+          if (operation.plan.requestedStartOffsetUs !== 0) {
+            seg.timelineStartUs = operation.plan.targetStartUs + Math.max(0, operation.plan.requestedStartOffsetUs);
+          }
+          t.segments.sort((a, b) => a.timelineStartUs - b.timelineStartUs);
+          break;
+        }
+      }
+      break;
+    }
+    case 'restoreOriginalAudio': {
+      for (const t of mockActiveProject.tracks) {
+        const seg = t.segments.find((s) => s.id === operation.segmentId);
+        if (seg && seg.originalAudioAssetId) {
+          seg.audioAssetId = seg.originalAudioAssetId;
+          seg.alignmentMode = 'original';
+          const origAsset = mockActiveProject.assets[seg.originalAudioAssetId];
+          if (origAsset) {
+            seg.sourceInUs = 0;
+            seg.sourceOutUs = origAsset.durationUs;
+          }
+          if (seg.originalCueStartUs !== undefined) {
+            seg.timelineStartUs = seg.originalCueStartUs;
+          }
+          seg.startOffsetUs = 0;
+          t.segments.sort((a, b) => a.timelineStartUs - b.timelineStartUs);
+          break;
+        }
+      }
+      break;
+    }
+    case 'setAlignmentMode': {
+      for (const t of mockActiveProject.tracks) {
+        const seg = t.segments.find((s) => s.id === operation.segmentId);
+        if (seg) {
+          seg.alignmentMode = operation.mode;
+          if (operation.mode === 'original') {
+            seg.audioAssetId = seg.originalAudioAssetId || seg.audioAssetId;
+          } else if (seg.alignedAudioAssetId) {
+            seg.audioAssetId = seg.alignedAudioAssetId;
+          }
+          const activeAsset = mockActiveProject.assets[seg.audioAssetId];
+          if (activeAsset) {
+            seg.sourceInUs = 0;
+            seg.sourceOutUs = activeAsset.durationUs;
+          }
+          t.segments.sort((a, b) => a.timelineStartUs - b.timelineStartUs);
+          break;
+        }
+      }
+      break;
+    }
+    case 'setStartOffset': {
+      for (const t of mockActiveProject.tracks) {
+        const seg = t.segments.find((s) => s.id === operation.segmentId);
+        if (seg) {
+          seg.startOffsetUs = operation.offsetUs;
+          const baseStart = seg.originalCueStartUs ?? seg.timelineStartUs;
+          seg.timelineStartUs = operation.offsetUs >= 0
+            ? baseStart + operation.offsetUs
+            : Math.max(0, baseStart + operation.offsetUs);
+          t.segments.sort((a, b) => a.timelineStartUs - b.timelineStartUs);
+          break;
+        }
+      }
+      break;
+    }
     default:
       break;
   }
@@ -571,4 +660,286 @@ export async function getDubbingAssetUrl(assetId: string): Promise<string> {
     return await invoke<string>('get_dubbing_asset_url', { assetId });
   }
   return `opentake-media://localhost/${assetId}`;
+}
+
+/**
+ * Plans duration alignment for a dubbing segment.
+ */
+export async function planDubbingAlignment(
+  segmentId: string,
+  config?: AlignmentConfig,
+  manualTempo?: number,
+  manualPadding?: SilencePaddingMode,
+  manualOffsetUs?: number
+): Promise<DubbingAlignmentPlan> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingAlignmentPlan>('plan_dubbing_alignment', {
+      segmentId,
+      config,
+      manualTempo,
+      manualPadding,
+      manualOffsetUs,
+    });
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+  let foundSeg = null;
+  for (const t of mockActiveProject.tracks) {
+    const s = t.segments.find((seg) => seg.id === segmentId);
+    if (s) {
+      foundSeg = s;
+      break;
+    }
+  }
+  if (!foundSeg) throw new Error(`Segment ${segmentId} not found`);
+
+  const trimmedUs = foundSeg.sourceOutUs - foundSeg.sourceInUs;
+  const targetStart = foundSeg.originalCueStartUs ?? foundSeg.timelineStartUs;
+  const targetEnd = foundSeg.originalCueEndUs ?? (targetStart + trimmedUs);
+  const targetDurationUs = targetEnd - targetStart;
+  const requestedStartOffsetUs = manualOffsetUs ?? (foundSeg.startOffsetUs ?? 0);
+  const effectiveTargetDurationUs = requestedStartOffsetUs >= 0
+    ? Math.max(0, targetDurationUs - requestedStartOffsetUs)
+    : targetDurationUs + Math.abs(requestedStartOffsetUs);
+
+  let proposedTempo = 1.0;
+  let paddingMode: SilencePaddingMode = manualPadding ?? config?.defaultPaddingMode ?? 'padEnd';
+  let paddingBeforeUs = 0;
+  let paddingAfterUs = 0;
+  let requiresManualReview = false;
+  let selectedStrategy = 'Original tempo preserved';
+
+  if (manualTempo) {
+    proposedTempo = manualTempo;
+    selectedStrategy = `Manual tempo override (${manualTempo}x)`;
+  } else if (trimmedUs > effectiveTargetDurationUs) {
+    const ideal = trimmedUs / effectiveTargetDurationUs;
+    proposedTempo = Math.round(ideal * 100) / 100;
+    if (ideal > 1.25) {
+      requiresManualReview = true;
+      selectedStrategy = `Tempo (${proposedTempo}x) exceeds auto limit; manual review recommended`;
+    } else {
+      selectedStrategy = `Pitch-preserving speedup (${proposedTempo}x)`;
+    }
+  } else if (trimmedUs < effectiveTargetDurationUs) {
+    const shortfall = effectiveTargetDurationUs - trimmedUs;
+    if (paddingMode === 'padEnd') paddingAfterUs = shortfall;
+    else if (paddingMode === 'padStart') paddingBeforeUs = shortfall;
+    else if (paddingMode === 'centered') {
+      paddingBeforeUs = Math.floor(shortfall / 2);
+      paddingAfterUs = shortfall - paddingBeforeUs;
+    }
+    selectedStrategy = `Speech shorter by ${(shortfall / 1000000).toFixed(2)}s; padded with silence`;
+  }
+
+  return {
+    segmentId,
+    originalAssetId: foundSeg.audioAssetId,
+    originalAssetHash: 'mock-orig-hash',
+    sourceTrimmedDurationUs: trimmedUs,
+    targetStartUs: targetStart,
+    targetEndUs: targetEnd,
+    targetDurationUs,
+    requestedStartOffsetUs,
+    effectiveTargetDurationUs,
+    proposedTempo,
+    paddingMode,
+    paddingBeforeUs,
+    paddingAfterUs,
+    selectedStrategy,
+    requiresManualReview,
+    warnings: [],
+    algorithmVersion: 1,
+  };
+}
+
+/**
+ * Processes audio alignment via FFmpeg atempo and silence padding.
+ */
+export async function processDubbingAlignment(
+  plan: DubbingAlignmentPlan
+): Promise<[DubbingAlignmentResult, DubbingAudioAsset]> {
+  if (isTauriEnvironment()) {
+    return await invoke<[DubbingAlignmentResult, DubbingAudioAsset]>('process_dubbing_alignment', { plan });
+  }
+
+  const alignedAssetId = `aligned-mock-${Date.now()}`;
+  const tempoDur = Math.round(plan.sourceTrimmedDurationUs / plan.proposedTempo);
+  const actualDurationUs = tempoDur + plan.paddingBeforeUs + plan.paddingAfterUs;
+
+  const alignedAsset: DubbingAudioAsset = {
+    assetId: alignedAssetId,
+    filePath: `/mock/path/${alignedAssetId}.wav`,
+    fileName: `${alignedAssetId}.wav`,
+    sha256: 'mock-aligned-sha256',
+    sampleRate: 22050,
+    channelCount: 1,
+    durationUs: actualDurationUs,
+    sizeBytes: Math.round((actualDurationUs / 1000000) * 44100),
+    voiceId: 'mock-voice',
+    createdAtEpochMs: Date.now(),
+  };
+
+  const result: DubbingAlignmentResult = {
+    alignmentId: `align-res-${Date.now()}`,
+    segmentId: plan.segmentId,
+    originalAssetId: plan.originalAssetId,
+    alignedAssetId,
+    actualOutputDurationUs: actualDurationUs,
+    effectivePlacementStartUs: plan.targetStartUs + Math.max(0, plan.requestedStartOffsetUs),
+    effectivePlacementEndUs: plan.targetStartUs + Math.max(0, plan.requestedStartOffsetUs) + actualDurationUs,
+    processingMethod: `atempo=${plan.proposedTempo.toFixed(2)}, pad=${plan.paddingBeforeUs + plan.paddingAfterUs}us`,
+    measuredDurationErrorUs: actualDurationUs - plan.effectiveTargetDurationUs,
+    tempoFactorApplied: plan.proposedTempo,
+    paddingBeforeAppliedUs: plan.paddingBeforeUs,
+    paddingAfterAppliedUs: plan.paddingAfterUs,
+    diagnostics: [],
+    status: 'aligned',
+    createdAtEpochMs: Date.now(),
+  };
+
+  return [result, alignedAsset];
+}
+
+/**
+ * Applies alignment plan and result to timeline.
+ */
+export async function applyDubbingAlignment(
+  segmentId: string,
+  plan: DubbingAlignmentPlan,
+  result: DubbingAlignmentResult,
+  alignedAsset: DubbingAudioAsset
+): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('apply_dubbing_alignment', {
+      segmentId,
+      plan,
+      result,
+      alignedAsset,
+    });
+  }
+
+  return await applyDubbingOperation({
+    type: 'applyAlignment',
+    segmentId,
+    plan,
+    result,
+    alignedAsset,
+  });
+}
+
+/**
+ * Restores original unaligned TTS speech audio for a segment.
+ */
+export async function restoreOriginalDubbingAudio(segmentId: string): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('restore_original_dubbing_audio', { segmentId });
+  }
+
+  return await applyDubbingOperation({
+    type: 'restoreOriginalAudio',
+    segmentId,
+  });
+}
+
+/**
+ * Switches between original and aligned audio playback mode.
+ */
+export async function setDubbingAlignmentMode(
+  segmentId: string,
+  mode: DubbingAlignmentMode
+): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('set_dubbing_alignment_mode', { segmentId, mode });
+  }
+
+  return await applyDubbingOperation({
+    type: 'setAlignmentMode',
+    segmentId,
+    mode,
+  });
+}
+
+/**
+ * Sets manual start offset in microseconds.
+ */
+export async function setDubbingStartOffset(
+  segmentId: string,
+  offsetUs: number
+): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('set_dubbing_start_offset', { segmentId, offsetUs });
+  }
+
+  return await applyDubbingOperation({
+    type: 'setStartOffset',
+    segmentId,
+    offsetUs,
+  });
+}
+
+/**
+ * Evaluates duration alignment diagnostics for the active project.
+ */
+export async function getDubbingAlignmentDiagnostics(
+  config?: AlignmentConfig
+): Promise<DubbingAlignmentFinding[]> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingAlignmentFinding[]>('get_dubbing_alignment_diagnostics', { config });
+  }
+
+  if (!mockActiveProject) return [];
+  const findings: DubbingAlignmentFinding[] = [];
+  const tolerance = config?.toleranceUs ?? 25000;
+
+  for (const track of mockActiveProject.tracks) {
+    for (const seg of track.segments) {
+      const dur = seg.sourceOutUs - seg.sourceInUs;
+      const targetStart = seg.originalCueStartUs ?? seg.timelineStartUs;
+      const targetEnd = seg.originalCueEndUs ?? (targetStart + dur);
+      const targetDur = targetEnd - targetStart;
+      const diff = dur - targetDur;
+
+      if (diff > tolerance) {
+        findings.push({
+          code: 'speechLongerThanCue',
+          severity: 'warning',
+          segmentId: seg.id,
+          message: `Speech duration overruns subtitle window by +${Math.round(diff / 1000)}ms`,
+          durationDiffUs: diff,
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Batch aligns multiple segments.
+ */
+export async function batchAlignDubbingSegments(
+  segmentIds?: string[],
+  config?: AlignmentConfig
+): Promise<DubbingProject> {
+  if (isTauriEnvironment()) {
+    return await invoke<DubbingProject>('batch_align_dubbing_segments', { segmentIds, config });
+  }
+
+  if (!mockActiveProject) throw new Error('No active project');
+  const candidateIds = segmentIds || mockActiveProject.tracks.flatMap((t) => t.segments.map((s) => s.id));
+
+  for (const id of candidateIds) {
+    try {
+      const plan = await planDubbingAlignment(id, config);
+      if (!plan.requiresManualReview) {
+        const [result, alignedAsset] = await processDubbingAlignment(plan);
+        await applyDubbingAlignment(id, plan, result, alignedAsset);
+      }
+    } catch {
+      // Ignore individual failures in mock batch
+    }
+  }
+
+  return { ...mockActiveProject };
 }

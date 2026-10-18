@@ -156,6 +156,12 @@ fn test_segment_non_destructive_operations() {
         gain: 1.0,
         status: DubbingSegmentStatus::Ready,
         warnings: Vec::new(),
+        original_audio_asset_id: None,
+        aligned_audio_asset_id: None,
+        alignment_mode: None,
+        alignment_plan: None,
+        alignment_result: None,
+        start_offset_us: None,
     };
     project.tracks[0].segments.push(seg);
 
@@ -300,6 +306,12 @@ fn test_dubbing_diagnostics_detection() {
         gain: 1.0,
         status: DubbingSegmentStatus::Ready,
         warnings: Vec::new(),
+        original_audio_asset_id: None,
+        aligned_audio_asset_id: None,
+        alignment_mode: None,
+        alignment_plan: None,
+        alignment_result: None,
+        start_offset_us: None,
     });
 
     // Segment 2: Overlaps segment 1 (starts at 4_000_000 while s1 ends at 6_000_000)
@@ -321,6 +333,12 @@ fn test_dubbing_diagnostics_detection() {
         gain: 1.0,
         status: DubbingSegmentStatus::Ready,
         warnings: Vec::new(),
+        original_audio_asset_id: None,
+        aligned_audio_asset_id: None,
+        alignment_mode: None,
+        alignment_plan: None,
+        alignment_result: None,
+        start_offset_us: None,
     });
 
     project.tracks.push(track);

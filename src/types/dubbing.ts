@@ -64,6 +64,99 @@ export interface DubbingSegment {
   gain: number;
   status: DubbingSegmentStatus;
   warnings: string[];
+  originalAudioAssetId?: string;
+  alignedAudioAssetId?: string;
+  alignmentMode?: DubbingAlignmentMode;
+  alignmentPlan?: DubbingAlignmentPlan;
+  alignmentResult?: DubbingAlignmentResult;
+  startOffsetUs?: number;
+}
+
+export type DubbingAlignmentMode = "original" | "autoFit" | "tempoAdjust" | "padSilence" | "manual";
+
+export type DubbingAlignmentStatus =
+  | "notAnalyzed"
+  | "ready"
+  | "processing"
+  | "aligned"
+  | "needsReview"
+  | "failed"
+  | "cancelled";
+
+export type SilencePaddingMode = "noPadding" | "padEnd" | "padStart" | "centered";
+
+export type DubbingAlignmentDiagnosticCode =
+  | "speechLongerThanCue"
+  | "speechShorterThanCue"
+  | "tempoExceedsAutoLimit"
+  | "tempoBelowAutoLimit"
+  | "alignmentRequiresReview"
+  | "alignedDurationMismatch"
+  | "dialogueOverlap"
+  | "outsideVideoBounds"
+  | "missingSourceAudio"
+  | "missingAlignedAudio"
+  | "corruptedAlignedAudio"
+  | "staleAlignment"
+  | "sourceTrimChanged"
+  | "voiceSegmentRegenerated"
+  | "manualOffsetConflict"
+  | "insufficientTimelineSpace";
+
+export interface DubbingAlignmentFinding {
+  code: DubbingAlignmentDiagnosticCode;
+  severity: DiagnosticSeverity;
+  segmentId: string;
+  message: string;
+  durationDiffUs?: number;
+}
+
+export interface AlignmentConfig {
+  minAutoTempo: number;
+  maxAutoTempo: number;
+  minSupportedTempo: number;
+  maxSupportedTempo: number;
+  toleranceUs: number;
+  defaultPaddingMode: SilencePaddingMode;
+  algorithmVersion: number;
+}
+
+export interface DubbingAlignmentPlan {
+  segmentId: string;
+  originalAssetId: string;
+  originalAssetHash: string;
+  sourceTrimmedDurationUs: number;
+  targetStartUs: number;
+  targetEndUs: number;
+  targetDurationUs: number;
+  requestedStartOffsetUs: number;
+  effectiveTargetDurationUs: number;
+  proposedTempo: number;
+  paddingMode: SilencePaddingMode;
+  paddingBeforeUs: number;
+  paddingAfterUs: number;
+  selectedStrategy: string;
+  requiresManualReview: boolean;
+  warnings: string[];
+  algorithmVersion: number;
+}
+
+export interface DubbingAlignmentResult {
+  alignmentId: string;
+  segmentId: string;
+  originalAssetId: string;
+  alignedAssetId?: string;
+  actualOutputDurationUs: number;
+  effectivePlacementStartUs: number;
+  effectivePlacementEndUs: number;
+  processingMethod: string;
+  measuredDurationErrorUs: number;
+  tempoFactorApplied: number;
+  paddingBeforeAppliedUs: number;
+  paddingAfterAppliedUs: number;
+  diagnostics: DubbingAlignmentFinding[];
+  status: DubbingAlignmentStatus;
+  createdAtEpochMs: number;
 }
 
 export interface DubbingTrack {
@@ -120,4 +213,14 @@ export type DubbingOperation =
   | { type: "setTrackSolo"; trackId: string; isSolo: boolean }
   | { type: "setTrackEnabled"; trackId: string; isEnabled: boolean }
   | { type: "updateTrackVoice"; trackId: string; voiceId?: string; speakerId?: number }
-  | { type: "reorderTracks"; trackIds: string[] };
+  | { type: "reorderTracks"; trackIds: string[] }
+  | {
+      type: "applyAlignment";
+      segmentId: string;
+      plan: DubbingAlignmentPlan;
+      result: DubbingAlignmentResult;
+      alignedAsset: DubbingAudioAsset;
+    }
+  | { type: "restoreOriginalAudio"; segmentId: string }
+  | { type: "setAlignmentMode"; segmentId: string; mode: DubbingAlignmentMode }
+  | { type: "setStartOffset"; segmentId: string; offsetUs: number };

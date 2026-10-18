@@ -188,6 +188,14 @@ pub fn run() {
             commands::dubbing::get_dubbing_waveform,
             commands::dubbing::get_dubbing_diagnostics,
             commands::dubbing::get_dubbing_asset_url,
+            commands::dubbing::plan_dubbing_alignment,
+            commands::dubbing::process_dubbing_alignment,
+            commands::dubbing::apply_dubbing_alignment,
+            commands::dubbing::restore_original_dubbing_audio,
+            commands::dubbing::set_dubbing_alignment_mode,
+            commands::dubbing::set_dubbing_start_offset,
+            commands::dubbing::get_dubbing_alignment_diagnostics,
+            commands::dubbing::batch_align_dubbing_segments,
         ])
         .run(tauri::generate_context!())
         .expect("error while running OpenTake desktop application");

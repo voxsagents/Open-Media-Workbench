@@ -135,6 +135,8 @@ pub fn split_segment(
     // Segment A (Left) keeps original ID
     let mut segment_a = original_segment.clone();
     segment_a.source_out_us = split_source_us;
+    segment_a.alignment_plan = None;
+    segment_a.alignment_result = None;
 
     // Segment B (Right) gets a new UUID
     let id_b = Uuid::new_v4().to_string();
@@ -156,6 +158,12 @@ pub fn split_segment(
         gain: original_segment.gain,
         status: original_segment.status,
         warnings: original_segment.warnings.clone(),
+        original_audio_asset_id: original_segment.original_audio_asset_id.clone(),
+        aligned_audio_asset_id: original_segment.aligned_audio_asset_id.clone(),
+        alignment_mode: original_segment.alignment_mode,
+        alignment_plan: None,
+        alignment_result: None,
+        start_offset_us: None,
     };
 
     let track = project

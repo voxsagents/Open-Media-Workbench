@@ -176,4 +176,67 @@ describe('Dubbing Timeline Client & Domain Logic', () => {
     assert.equal(reloaded?.id, project.id);
     assert.equal(reloaded?.tracks[0].segments.length, 2);
   });
+
+  it('plans, processes, applies, and restores duration alignment', async () => {
+    const {
+      planDubbingAlignment,
+      processDubbingAlignment,
+      applyDubbingAlignment,
+      restoreOriginalDubbingAudio,
+      setDubbingAlignmentMode,
+      setDubbingStartOffset,
+      getDubbingAlignmentDiagnostics,
+      batchAlignDubbingSegments,
+    } = await import('./dubbing');
+
+    const sampleDoc = createSampleDoc();
+    const project = await createDubbingProject(sampleDoc, 'sub-track-1', 'en');
+    const dubTrackId = project.tracks[0].id;
+    await generateDubbingSegments(dubTrackId, sampleDoc);
+
+    const seg1Id = project.tracks[0].segments[0].id;
+
+    // 1. Plan alignment
+    const plan = await planDubbingAlignment(seg1Id);
+    assert.ok(plan);
+    assert.equal(plan.segmentId, seg1Id);
+    assert.ok(plan.proposedTempo > 0);
+
+    // 2. Process alignment
+    const [result, alignedAsset] = await processDubbingAlignment(plan);
+    assert.ok(result);
+    assert.ok(alignedAsset);
+    assert.equal(result.status, 'aligned');
+
+    // 3. Apply alignment
+    const updated = await applyDubbingAlignment(seg1Id, plan, result, alignedAsset);
+    const seg = updated.tracks[0].segments.find((s) => s.id === seg1Id);
+    assert.ok(seg);
+    assert.equal(seg?.audioAssetId, alignedAsset.assetId);
+    assert.equal(seg?.alignedAudioAssetId, alignedAsset.assetId);
+    assert.equal(seg?.alignmentMode, 'autoFit');
+
+    // 4. Set start offset
+    const withOffset = await setDubbingStartOffset(seg1Id, 250_000);
+    const segOffset = withOffset.tracks[0].segments.find((s) => s.id === seg1Id);
+    assert.equal(segOffset?.startOffsetUs, 250_000);
+
+    // 5. Switch to original mode
+    const switched = await setDubbingAlignmentMode(seg1Id, 'original');
+    const segOrig = switched.tracks[0].segments.find((s) => s.id === seg1Id);
+    assert.equal(segOrig?.alignmentMode, 'original');
+
+    // 6. Restore original audio completely
+    const restored = await restoreOriginalDubbingAudio(seg1Id);
+    const segRestored = restored.tracks[0].segments.find((s) => s.id === seg1Id);
+    assert.equal(segRestored?.alignmentMode, 'original');
+
+    // 7. Diagnostics
+    const diags = await getDubbingAlignmentDiagnostics();
+    assert.ok(Array.isArray(diags));
+
+    // 8. Batch align
+    const batchResult = await batchAlignDubbingSegments();
+    assert.ok(batchResult);
+  });
 });

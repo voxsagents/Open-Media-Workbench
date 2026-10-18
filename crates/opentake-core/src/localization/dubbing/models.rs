@@ -136,6 +136,27 @@ pub struct DubbingSegment {
     /// Non-fatal diagnostic warning messages.
     #[serde(default)]
     pub warnings: Vec<String>,
+    /// Original TTS audio asset ID (before duration alignment).
+    #[serde(default)]
+    pub original_audio_asset_id: Option<String>,
+    /// Aligned audio asset ID (if tempo/padding alignment has been processed).
+    #[serde(default)]
+    pub aligned_audio_asset_id: Option<String>,
+    /// Active alignment mode (Original, AutoFit, TempoAdjust, PadSilence, Manual).
+    #[serde(default)]
+    pub alignment_mode:
+        Option<crate::localization::dubbing::alignment::models::DubbingAlignmentMode>,
+    /// Planned duration alignment parameters.
+    #[serde(default)]
+    pub alignment_plan:
+        Option<crate::localization::dubbing::alignment::models::DubbingAlignmentPlan>,
+    /// Processed duration alignment execution results.
+    #[serde(default)]
+    pub alignment_result:
+        Option<crate::localization::dubbing::alignment::models::DubbingAlignmentResult>,
+    /// Manual start offset in microseconds relative to cue start.
+    #[serde(default)]
+    pub start_offset_us: Option<i64>,
 }
 
 impl DubbingSegment {
@@ -158,6 +179,31 @@ impl DubbingSegment {
     pub fn cue_overrun_us(&self) -> Option<i64> {
         self.original_cue_end_us
             .map(|cue_end| (self.timeline_end_us() as i64) - (cue_end as i64))
+    }
+
+    /// Returns the currently active audio asset ID for playback and waveform rendering.
+    pub fn active_audio_asset_id(&self) -> &str {
+        if let Some(
+            crate::localization::dubbing::alignment::models::DubbingAlignmentMode::Original,
+        ) = self.alignment_mode
+        {
+            self.original_audio_asset_id
+                .as_deref()
+                .unwrap_or(&self.audio_asset_id)
+        } else if let Some(aligned_id) = &self.aligned_audio_asset_id {
+            aligned_id.as_str()
+        } else {
+            &self.audio_asset_id
+        }
+    }
+
+    /// Returns whether this segment currently has an active aligned asset applied.
+    pub fn is_aligned(&self) -> bool {
+        self.aligned_audio_asset_id.is_some()
+            && self.alignment_mode
+                != Some(
+                    crate::localization::dubbing::alignment::models::DubbingAlignmentMode::Original,
+                )
     }
 }
 

@@ -175,17 +175,27 @@ export function DubbingSegmentClip({
           sourceOutUs={segment.sourceOutUs}
           widthPx={widthPx}
           heightPx={46}
-          color={isOverrunning ? '#f59e0b' : '#818cf8'}
+          color={segment.alignedAudioAssetId ? '#10b981' : isOverrunning ? '#f59e0b' : '#818cf8'}
         />
       </div>
 
       {/* Clip Header */}
       <div className="relative z-10 px-2 py-0.5 flex items-center justify-between text-[10px] bg-zinc-950/60 backdrop-blur-xs border-b border-white/5">
-        <div className="flex items-center space-x-1.5 truncate max-w-[70%]">
+        <div className="flex items-center space-x-1.5 truncate max-w-[65%]">
           <span className="font-semibold text-zinc-200 truncate">{segment.sourceText}</span>
         </div>
         <div className="flex items-center space-x-1 shrink-0">
-          {isOverrunning && (
+          {segment.alignedAudioAssetId && (
+            <span
+              title="Aligned audio active (pitch-preserved tempo / padded)"
+              className="px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] border border-emerald-500/40"
+            >
+              {segment.alignmentPlan?.proposedTempo
+                ? `${segment.alignmentPlan.proposedTempo.toFixed(2)}x`
+                : 'Aligned'}
+            </span>
+          )}
+          {isOverrunning && !segment.alignedAudioAssetId && (
             <span
               title={`Speech exceeds subtitle interval by +${overrunSecs}s`}
               className="px-1 py-0.2 rounded bg-amber-500/20 text-amber-300 font-mono text-[9px] border border-amber-500/40"

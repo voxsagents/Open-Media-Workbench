@@ -200,7 +200,7 @@ pub fn synthesize_and_place_cues(
             source_text_hash: compute_sha256(cue.text.as_bytes()),
             voice_id: voice_id.to_string(),
             speaker_id,
-            audio_asset_id: asset_id,
+            audio_asset_id: asset_id.clone(),
             source_in_us: 0,
             source_out_us: metadata.duration_us,
             timeline_start_us: cue_start_us,
@@ -209,6 +209,14 @@ pub fn synthesize_and_place_cues(
             gain: 1.0,
             status: DubbingSegmentStatus::Ready,
             warnings: Vec::new(),
+            original_audio_asset_id: Some(asset_id),
+            aligned_audio_asset_id: None,
+            alignment_mode: Some(
+                crate::localization::dubbing::alignment::models::DubbingAlignmentMode::Original,
+            ),
+            alignment_plan: None,
+            alignment_result: None,
+            start_offset_us: None,
         };
 
         // If a segment already exists for this cue on the track, replace it; otherwise append
@@ -363,11 +371,17 @@ pub fn regenerate_segment(
     segment.source_text_hash = compute_sha256(text_to_synth.as_bytes());
     segment.voice_id = voice_to_use;
     segment.speaker_id = speaker_to_use;
-    segment.audio_asset_id = temp_asset_id;
+    segment.audio_asset_id = temp_asset_id.clone();
     segment.source_in_us = 0;
     segment.source_out_us = metadata.duration_us;
     segment.status = DubbingSegmentStatus::Ready;
     segment.warnings.clear();
+    segment.original_audio_asset_id = Some(temp_asset_id);
+    segment.aligned_audio_asset_id = None;
+    segment.alignment_mode =
+        Some(crate::localization::dubbing::alignment::models::DubbingAlignmentMode::Original);
+    segment.alignment_plan = None;
+    segment.alignment_result = None;
 
     if let Some(track) = project.find_track_mut(&track_id) {
         track.sort_segments();

@@ -17,8 +17,10 @@ import {
   loadDubbingFromDocument,
   saveDubbingToDocument,
   getDubbingAssetUrl,
+  batchAlignDubbingSegments,
 } from '../../lib/dubbing';
 import { DubbingSegmentClip } from './DubbingSegmentClip';
+import { DubbingAlignmentInspector } from './DubbingAlignmentInspector';
 import { Button } from '../../components/ui/Button';
 import {
   SparklesIcon,
@@ -54,9 +56,18 @@ export function DubbingTimelinePanel({
   const [showDiagnosticsDrawer, setShowDiagnosticsDrawer] = useState<boolean>(false);
   const [zoomLevel, setZoomLevel] = useState<number>(1.0); // 0.25x to 4x
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [isBatchAligning, setIsBatchAligning] = useState<boolean>(false);
   const [generationFeedback, setGenerationFeedback] = useState<string | null>(null);
   const [canUndo, setCanUndo] = useState<boolean>(false);
   const [canRedo, setCanRedo] = useState<boolean>(false);
+
+  // Selected segment helper
+  const selectedSegment = useMemo(() => {
+    if (!project || !selectedSegmentId) return null;
+    return (
+      project.tracks.flatMap((t) => t.segments).find((s) => s.id === selectedSegmentId) || null
+    );
+  }, [project, selectedSegmentId]);
 
   // Audition playback state
   const audioAuditionRef = useRef<HTMLAudioElement | null>(null);
@@ -335,6 +346,30 @@ export function DubbingTimelinePanel({
     }
   };
 
+  // 9. Dubbing Alignment Operations
+  const handleBatchAutoFit = async () => {
+    if (!project) return;
+    const allSegments = project.tracks.flatMap((t) => t.segments);
+    const eligibleIds = allSegments.filter((s) => s.audioAssetId).map((s) => s.id);
+    if (eligibleIds.length === 0) {
+      setGenerationFeedback('No synthesized speech segments found to align.');
+      return;
+    }
+    setIsBatchAligning(true);
+    setGenerationFeedback(`Running AutoFit alignment on ${eligibleIds.length} segments...`);
+    try {
+      const updated = await batchAlignDubbingSegments(eligibleIds);
+      setProject(updated);
+      setCanUndo(true);
+      setGenerationFeedback('Batch alignment completed successfully!');
+      setTimeout(() => setGenerationFeedback(null), 4000);
+    } catch (err) {
+      setGenerationFeedback(`Batch alignment failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setIsBatchAligning(false);
+    }
+  };
+
   // Playhead position in pixels
   const playheadPx = Math.round((currentTime * 1_000_000) / microsPerPixel);
 
@@ -384,6 +419,18 @@ export function DubbingTimelinePanel({
           >
             <SparklesIcon size={12} className="mr-1.5" />
             {isGenerating ? 'Synthesizing...' : 'Generate AI Speech'}
+          </Button>
+
+          <Button
+            size="xs"
+            variant="secondary"
+            onClick={handleBatchAutoFit}
+            disabled={!project || isBatchAligning || isGenerating}
+            title="Automatically analyze and time-stretch/pad speech segments to fit subtitle cues"
+            className="text-xs"
+          >
+            <SparklesIcon size={12} className="mr-1.5 text-amber-400" />
+            {isBatchAligning ? 'Aligning...' : 'Batch AutoFit'}
           </Button>
 
           {selectedSegmentId && (
@@ -664,6 +711,20 @@ export function DubbingTimelinePanel({
             ))}
           </div>
         </div>
+
+        {/* Alignment Inspector Drawer (Right sidebar) */}
+        {selectedSegment && (
+          <div className="w-84 shrink-0 border-l border-zinc-800 bg-zinc-900/95 overflow-y-auto z-20">
+            <DubbingAlignmentInspector
+              segment={selectedSegment}
+              onProjectUpdated={(updated) => {
+                setProject(updated);
+                setCanUndo(true);
+              }}
+              onClose={() => setSelectedSegmentId(null)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Diagnostics Drawer (Collapsible) */}

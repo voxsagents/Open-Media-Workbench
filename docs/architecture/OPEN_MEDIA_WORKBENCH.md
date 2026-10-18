@@ -182,7 +182,14 @@ The foundational work completed across STEPS 1 through 9 remains completely pres
   - **Rollback-Safe Regeneration:** Re-synthesizes speech with Piper TTS on demand with automatic fallback retention if generation fails.
   - **Interval-Based Diagnostics:** Efficient $O(N \log N)$ scan detecting segment overlaps, cue overruns, missing assets, unresolved voices, and large dialogue gaps.
   - **50-Step Undo/Redo & Project Persistence:** Deterministic in-memory command stack with lossless `.omwsub` project metadata embedding.
-- **Speech Duration Alignment (Planned STEP 27)**
+- **Professional AI Dubbing Duration Alignment (STEP 27 Implemented):**
+  - **Grounded Timing Analysis:** Microsecond-precision comparison between speech sample duration and subtitle display windows.
+  - **Deterministic AutoFit Planner:** Conservative tempo scaling (0.85x–1.15x policy; 1.25x max auto limit) with explainable strategy reporting and `NeedsReview` flags for extreme mismatches.
+  - **Pitch-Preserving Audio Time-Stretching:** System FFmpeg `atempo` filter execution with sample-measured output verification and chained stages for wide tempo ranges.
+  - **Sample-Accurate PCM Silence Padding:** Exact sample frame padding (`PadEnd`, `PadStart`, `Centered`) preserving dialogue start rhythm.
+  - **Non-Destructive Asset Cache & Staging:** Content-addressed SHA-256 storage (`aligned_{hash}.wav`) with immutable source speech preservation and instant restoration.
+  - **True A/B Preview & Inspector:** Dedicated inspector with duration comparison, manual tempo sliders (0.50x–2.00x), start offset nudge controls, and synchronized A/B audio player over `opentake-media://`.
+  - **Batch Alignment:** Concurrently analyzes, plans, and fits dialogue segments across tracks with partial-success tolerance and cancellation support.
 - **Dialogue Mixing & Video Dubbing Export (Planned STEP 28)**
 - **Multiplexed Soft Subtitle Export (Planned STEP 30):**
   - Uses the shared FFmpeg managed process engine to mux soft subtitle streams into output containers.

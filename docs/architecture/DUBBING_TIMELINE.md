@@ -163,3 +163,14 @@ When a user triggers segment regeneration:
 - **Timeline Scrubbing:** Clicking or scrubbing the horizontal ruler or track lane seeks the video player to that exact microsecond.
 - **Segment Audition:** Users can play individual segments in isolation or audition the full multi-track dubbing timeline in sync with video.
 - **Mute & Solo:** Tracks feature mute and solo toggles respected during auditioning.
+
+---
+
+## 9. Integration with Duration Alignment (STEP 27)
+
+The dubbing timeline seamlessly interfaces with the **Dubbing Duration Alignment** engine (`docs/architecture/DUBBING_DURATION_ALIGNMENT.md`):
+- `original_audio_asset_id` stores the immutable source Piper TTS recording.
+- `aligned_audio_asset_id` stores the content-addressed pitch-preserving time-stretched and silence-padded asset.
+- `active_audio_asset_id()` selects the active playback asset according to the user-selected alignment mode (`Original`, `AutoFit`, `TempoAdjust`, `PadSilence`, `Manual`).
+- Regenerating speech for a segment invalidates stale alignment plans and results cleanly without deleting original assets.
+

@@ -3,6 +3,7 @@
 //! Provides multi-track audio segment timeline editing, non-destructive trimming,
 //! real waveform visualization, cue synchronization, and offline TTS placement.
 
+pub mod alignment;
 pub mod errors;
 pub mod history;
 pub mod models;
@@ -238,6 +239,77 @@ impl DubbingManager {
         document: Option<&SubtitleDocument>,
     ) -> Vec<DubbingDiagnosticFinding> {
         validate_dubbing_project(project, document)
+    }
+
+    /// Plans duration alignment for a specific segment.
+    pub fn plan_segment_alignment(
+        &self,
+        project: &DubbingProject,
+        segment_id: &str,
+        config: Option<&alignment::AlignmentConfig>,
+        manual_tempo: Option<f32>,
+        manual_padding: Option<alignment::SilencePaddingMode>,
+        manual_offset_us: Option<i64>,
+    ) -> Result<alignment::DubbingAlignmentPlan, alignment::DubbingAlignmentError> {
+        let (track, segment) = project.find_segment(segment_id).ok_or_else(|| {
+            alignment::DubbingAlignmentError::SegmentNotFound(segment_id.to_string())
+        })?;
+
+        let asset = project.assets.get(&segment.audio_asset_id).ok_or_else(|| {
+            alignment::DubbingAlignmentError::AssetNotFound(segment.audio_asset_id.clone())
+        })?;
+
+        // Find next segment start on track
+        let next_start = track
+            .segments
+            .iter()
+            .find(|s| s.timeline_start_us > segment.timeline_start_us)
+            .map(|s| s.timeline_start_us);
+
+        let default_config = alignment::AlignmentConfig::default();
+        let eff_config = config.unwrap_or(&default_config);
+
+        alignment::plan_segment_alignment(
+            segment,
+            asset,
+            eff_config,
+            manual_tempo,
+            manual_padding,
+            manual_offset_us,
+            next_start,
+        )
+    }
+
+    /// Executes alignment processing for a planned segment.
+    pub async fn process_segment_alignment(
+        &self,
+        project: &DubbingProject,
+        plan: &alignment::DubbingAlignmentPlan,
+        cancel_token: tokio_util::sync::CancellationToken,
+    ) -> Result<
+        (alignment::DubbingAlignmentResult, DubbingAudioAsset),
+        alignment::DubbingAlignmentError,
+    > {
+        let (_, segment) = project.find_segment(&plan.segment_id).ok_or_else(|| {
+            alignment::DubbingAlignmentError::SegmentNotFound(plan.segment_id.clone())
+        })?;
+
+        let asset = project.assets.get(&plan.original_asset_id).ok_or_else(|| {
+            alignment::DubbingAlignmentError::AssetNotFound(plan.original_asset_id.clone())
+        })?;
+
+        alignment::execute_alignment_plan(plan, segment, asset, &self.base_dir, cancel_token).await
+    }
+
+    /// Evaluates alignment diagnostics across project.
+    pub fn get_alignment_diagnostics(
+        &self,
+        project: &DubbingProject,
+        config: Option<&alignment::AlignmentConfig>,
+    ) -> Vec<alignment::DubbingAlignmentFinding> {
+        let default_config = alignment::AlignmentConfig::default();
+        let eff_config = config.unwrap_or(&default_config);
+        alignment::evaluate_alignment_diagnostics(project, eff_config)
     }
 
     /// Helper to record an undo snapshot.

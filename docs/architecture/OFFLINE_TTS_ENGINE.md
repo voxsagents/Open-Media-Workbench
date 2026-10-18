@@ -142,7 +142,7 @@ When synthesizing from a `SubtitleTrack`:
    - `timing_difference_us`: Signed timing delta (`(duration_us as i64) - (cue_duration_us as i64)`).
 3. **No Silent Stretching / No Truncation**:
    - The engine **never** time-stretches speech or truncates speech to forcibly fit cue intervals.
-   - Any difference between subtitle duration and speech duration is reported explicitly in the UI to guide future dubbing alignment in STEP 27.
+   - Any difference between subtitle duration and speech duration is reported explicitly in the UI, and fed directly into the Duration Alignment engine (STEP 27) for pitch-preserving time-stretching or silence padding.
    - Original subtitle tracks remain completely immutable.
 
 ---

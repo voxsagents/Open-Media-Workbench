@@ -302,3 +302,236 @@ pub async fn get_dubbing_asset_url(
         Err(format!("Asset '{asset_id}' not found in active project"))
     }
 }
+
+/// Generates an explainable duration alignment plan for a dubbing segment.
+#[tauri::command]
+pub async fn plan_dubbing_alignment(
+    state: State<'_, DubbingState>,
+    segment_id: String,
+    config: Option<opentake_core::localization::dubbing::alignment::AlignmentConfig>,
+    manual_tempo: Option<f32>,
+    manual_padding: Option<opentake_core::localization::dubbing::alignment::SilencePaddingMode>,
+    manual_offset_us: Option<i64>,
+) -> Result<opentake_core::localization::dubbing::alignment::DubbingAlignmentPlan, String> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    state
+        .manager
+        .plan_segment_alignment(
+            project,
+            &segment_id,
+            config.as_ref(),
+            manual_tempo,
+            manual_padding,
+            manual_offset_us,
+        )
+        .map_err(|e| e.to_string())
+}
+
+/// Processes audio alignment for a planned segment using FFmpeg and silence padding.
+#[tauri::command]
+pub async fn process_dubbing_alignment(
+    state: State<'_, DubbingState>,
+    plan: opentake_core::localization::dubbing::alignment::DubbingAlignmentPlan,
+) -> Result<
+    (
+        opentake_core::localization::dubbing::alignment::DubbingAlignmentResult,
+        opentake_core::localization::dubbing::DubbingAudioAsset,
+    ),
+    String,
+> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let cancel = tokio_util::sync::CancellationToken::new();
+    state
+        .manager
+        .process_segment_alignment(project, &plan, cancel)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Applies an executed alignment result to the dubbing timeline.
+#[tauri::command]
+pub async fn apply_dubbing_alignment(
+    state: State<'_, DubbingState>,
+    segment_id: String,
+    plan: opentake_core::localization::dubbing::alignment::DubbingAlignmentPlan,
+    result: opentake_core::localization::dubbing::alignment::DubbingAlignmentResult,
+    aligned_asset: opentake_core::localization::dubbing::DubbingAudioAsset,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let op = DubbingOperation::ApplyAlignment {
+        segment_id,
+        plan,
+        result,
+        aligned_asset,
+    };
+
+    state
+        .manager
+        .execute_operation(project, &op)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(project.clone())
+}
+
+/// Restores the original TTS speech audio for a segment.
+#[tauri::command]
+pub async fn restore_original_dubbing_audio(
+    state: State<'_, DubbingState>,
+    segment_id: String,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let op = DubbingOperation::RestoreOriginalAudio { segment_id };
+
+    state
+        .manager
+        .execute_operation(project, &op)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(project.clone())
+}
+
+/// Sets the active playback mode (Original vs Aligned) for a segment.
+#[tauri::command]
+pub async fn set_dubbing_alignment_mode(
+    state: State<'_, DubbingState>,
+    segment_id: String,
+    mode: opentake_core::localization::dubbing::alignment::DubbingAlignmentMode,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let op = DubbingOperation::SetAlignmentMode { segment_id, mode };
+
+    state
+        .manager
+        .execute_operation(project, &op)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(project.clone())
+}
+
+/// Adjusts manual start offset for a segment.
+#[tauri::command]
+pub async fn set_dubbing_start_offset(
+    state: State<'_, DubbingState>,
+    segment_id: String,
+    offset_us: i64,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let op = DubbingOperation::SetStartOffset {
+        segment_id,
+        offset_us,
+    };
+
+    state
+        .manager
+        .execute_operation(project, &op)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(project.clone())
+}
+
+/// Evaluates duration alignment diagnostics for the active project.
+#[tauri::command]
+pub async fn get_dubbing_alignment_diagnostics(
+    state: State<'_, DubbingState>,
+    config: Option<opentake_core::localization::dubbing::alignment::AlignmentConfig>,
+) -> Result<Vec<opentake_core::localization::dubbing::alignment::DubbingAlignmentFinding>, String> {
+    let guard = state.active_project.read().await;
+    let Some(ref project) = *guard else {
+        return Ok(Vec::new());
+    };
+
+    Ok(state
+        .manager
+        .get_alignment_diagnostics(project, config.as_ref()))
+}
+
+/// Batch aligns selected or all eligible segments on dubbing tracks.
+#[tauri::command]
+pub async fn batch_align_dubbing_segments(
+    state: State<'_, DubbingState>,
+    segment_ids: Option<Vec<String>>,
+    config: Option<opentake_core::localization::dubbing::alignment::AlignmentConfig>,
+) -> Result<DubbingProject, String> {
+    let mut guard = state.active_project.write().await;
+    let Some(ref mut project) = *guard else {
+        return Err("No active dubbing project".into());
+    };
+
+    let eff_config = config.unwrap_or_default();
+
+    // Identify candidate segments
+    let candidate_ids: Vec<String> = match segment_ids {
+        Some(ids) => ids,
+        None => project
+            .tracks
+            .iter()
+            .flat_map(|t| t.segments.iter().map(|s| s.id.clone()))
+            .collect(),
+    };
+
+    let cancel = tokio_util::sync::CancellationToken::new();
+
+    for seg_id in candidate_ids {
+        let plan_res = state.manager.plan_segment_alignment(
+            project,
+            &seg_id,
+            Some(&eff_config),
+            None,
+            None,
+            None,
+        );
+
+        let Ok(plan) = plan_res else {
+            continue;
+        };
+
+        // Skip items that require manual review in batch mode to prevent forced extreme distortion
+        if plan.requires_manual_review {
+            continue;
+        }
+
+        if let Ok((result, aligned_asset)) = state
+            .manager
+            .process_segment_alignment(project, &plan, cancel.clone())
+            .await
+        {
+            let op = DubbingOperation::ApplyAlignment {
+                segment_id: seg_id,
+                plan,
+                result,
+                aligned_asset,
+            };
+            let _ = state.manager.execute_operation(project, &op).await;
+        }
+    }
+
+    Ok(project.clone())
+}
